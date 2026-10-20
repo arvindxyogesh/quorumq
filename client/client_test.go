@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,24 +20,27 @@ import (
 	"github.com/arvindxyogesh/quorumq/internal/server"
 )
 
-// startServer runs a real gRPC server over an in-memory listener.
-func startServer(t *testing.T) *client.Client {
+func newLocalBroker(t *testing.T) *broker.Local {
 	t.Helper()
 	store, err := queue.Open(filepath.Join(t.TempDir(), "queue.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = store.Close() })
+	return broker.NewLocal(store)
+}
+
+// startBufconn runs a real gRPC server over an in-memory listener.
+func startBufconn(t *testing.T, b server.Broker) *client.Client {
+	t.Helper()
 	lis := bufconn.Listen(1 << 20)
 	gs := grpc.NewServer()
-	pb.RegisterQueueServiceServer(gs, server.New(broker.NewLocal(store)))
+	pb.RegisterQueueServiceServer(gs, server.New(b))
 	go func() { _ = gs.Serve(lis) }()
-	t.Cleanup(func() {
-		gs.Stop()
-		_ = store.Close()
-	})
+	t.Cleanup(gs.Stop)
 
-	c, err := client.Dial("passthrough:///bufnet",
-		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return lis.DialContext(ctx) }))
+	c, err := client.New([]string{"passthrough:///bufnet"}, client.WithDialOptions(
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return lis.DialContext(ctx) })))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,8 +48,22 @@ func startServer(t *testing.T) *client.Client {
 	return c
 }
 
+// startTCP runs a gRPC server on a real localhost port and returns its address.
+func startTCP(t *testing.T, b server.Broker) string {
+	t.Helper()
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gs := grpc.NewServer()
+	pb.RegisterQueueServiceServer(gs, server.New(b))
+	go func() { _ = gs.Serve(lis) }()
+	t.Cleanup(gs.Stop)
+	return lis.Addr().String()
+}
+
 func TestSubmitClaimAckRoundTrip(t *testing.T) {
-	c := startServer(t)
+	c := startBufconn(t, newLocalBroker(t))
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -90,7 +108,7 @@ func TestSubmitClaimAckRoundTrip(t *testing.T) {
 }
 
 func TestNackRedelivers(t *testing.T) {
-	c := startServer(t)
+	c := startBufconn(t, newLocalBroker(t))
 	ctx := context.Background()
 	id, _ := c.Submit(ctx, "q", []byte("x"), 3)
 
@@ -105,5 +123,90 @@ func TestNackRedelivers(t *testing.T) {
 	err = c.Ack(ctx, id, first.ID)
 	if status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("ack with superseded lease: got %v, want FailedPrecondition", err)
+	}
+}
+
+// follower is a broker that always redirects to a leader and counts calls.
+type follower struct {
+	server.Broker
+	leader string
+	calls  atomic.Int32
+}
+
+func (f *follower) Submit(context.Context, string, []byte, uint32) (uint64, error) {
+	f.calls.Add(1)
+	return 0, &broker.NotLeaderError{Leader: f.leader}
+}
+
+func TestClientFollowsLeaderHint(t *testing.T) {
+	leaderAddr := startTCP(t, newLocalBroker(t))
+	f := &follower{leader: leaderAddr}
+	followerAddr := startTCP(t, f)
+
+	c, err := client.New([]string{followerAddr})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	for i := 0; i < 3; i++ {
+		if _, err := c.Submit(ctx, "q", []byte("x"), 0); err != nil {
+			t.Fatalf("submit %d: %v", i, err)
+		}
+	}
+	// Only the first call reached the follower; the rest went to the leader.
+	if n := f.calls.Load(); n != 1 {
+		t.Fatalf("follower received %d calls, want 1", n)
+	}
+}
+
+func TestClientSkipsUnreachableNodes(t *testing.T) {
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dead := lis.Addr().String()
+	_ = lis.Close() // nothing listens here any more
+
+	live := startTCP(t, newLocalBroker(t))
+	c, err := client.New([]string{dead, live}, client.WithBackoff(time.Millisecond, 10*time.Millisecond))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if _, err := c.Submit(ctx, "q", []byte("x"), 0); err != nil {
+		t.Fatalf("Submit with one dead node: %v", err)
+	}
+}
+
+func TestClientGivesUpWhenContextExpires(t *testing.T) {
+	f := &follower{} // no leader known: every call is Unavailable
+	c, err := client.New([]string{startTCP(t, f)}, client.WithBackoff(time.Millisecond, 5*time.Millisecond))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	_, err = c.Submit(ctx, "q", []byte("x"), 0)
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("got %v, want the last Unavailable error", err)
+	}
+	if f.calls.Load() < 2 {
+		t.Fatalf("expected retries before giving up, got %d calls", f.calls.Load())
+	}
+}
+
+func TestClientDoesNotRetryApplicationErrors(t *testing.T) {
+	c := startBufconn(t, newLocalBroker(t))
+	_, err := c.Get(context.Background(), "12345")
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("got %v, want NotFound without retries", err)
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -22,7 +23,7 @@ import (
 	"github.com/arvindxyogesh/quorumq/client"
 )
 
-const usage = `usage: quorumq [-addr host:port] <command> [flags]
+const usage = `usage: quorumq [-addr host:port[,host:port...]] <command> [flags]
 
 commands:
   submit  -queue Q -payload P [-max-retries N]   enqueue a job
@@ -32,7 +33,8 @@ commands:
   get     -job ID                                show a job
   stats   -queue Q                               show queue counts
 
-The broker address defaults to $QUORUMQ_ADDR, or localhost:7070.
+-addr defaults to $QUORUMQ_ADDR, or localhost:7070. Give several nodes and
+the CLI finds the leader itself.
 `
 
 func main() {
@@ -45,7 +47,7 @@ func main() {
 func run(args []string, out io.Writer) error {
 	global := flag.NewFlagSet("quorumq", flag.ContinueOnError)
 	global.Usage = func() { _, _ = fmt.Fprint(global.Output(), usage) }
-	addr := global.String("addr", envOr("QUORUMQ_ADDR", "localhost:7070"), "broker address")
+	addr := global.String("addr", envOr("QUORUMQ_ADDR", "localhost:7070"), "comma-separated broker addresses")
 	timeout := global.Duration("timeout", 10*time.Second, "per-request timeout")
 	if err := global.Parse(args); err != nil {
 		return err
@@ -55,7 +57,7 @@ func run(args []string, out io.Writer) error {
 		return errors.New("missing command")
 	}
 
-	c, err := client.Dial(*addr)
+	c, err := client.New(strings.Split(*addr, ","))
 	if err != nil {
 		return err
 	}
