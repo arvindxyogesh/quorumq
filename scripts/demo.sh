@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Demo of a single quorumq node: submit, claim, ack, nack, and a visibility
-# timeout expiring. Requires Go and jq.
+# Demo of a single quorumq node: submit, claim, ack, nack with retry backoff,
+# a visibility timeout expiring, and the dead-letter queue. Requires Go and jq.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -15,7 +15,7 @@ go build -o bin/quorumq ./cmd/quorumq
 q() { ./bin/quorumq "$@"; }
 
 echo "==> starting server on $ADDR (data in $DATA_DIR)"
-./bin/quorumq-server -addr "$ADDR" -data-dir "$DATA_DIR" 2>"$LOG" &
+./bin/quorumq-server -addr "$ADDR" -data-dir "$DATA_DIR" -retry-backoff 1s 2>"$LOG" &
 SERVER_PID=$!
 trap 'kill $SERVER_PID 2>/dev/null || true; wait $SERVER_PID 2>/dev/null || true; rm -rf "$DATA_DIR"' EXIT
 
@@ -40,16 +40,17 @@ echo "claimed job $JOB payload=$(jq -r .job.payload <<<"$CLAIM" | base64 -d) lea
 q ack -job "$JOB" -lease "$LEASE" | jq -c .
 
 echo
-echo "==> claim + nack: the job goes back to the queue"
+echo "==> claim + nack: the job is retried after a backoff (1s, then 2s, 4s, ...)"
 CLAIM=$(q claim -queue demo -worker worker-a)
 JOB=$(jq -r .job.id <<<"$CLAIM")
-q nack -job "$JOB" -lease "$(jq -r .lease_id <<<"$CLAIM")" | jq -c .
-q get -job "$JOB" | jq -c '{id, state, attempts}'
-echo "jobs are claimed in the order they became visible, so job 3 (visible since"
-echo "it was submitted) comes before the job that was just nacked:"
+q nack -job "$JOB" -lease "$(jq -r .lease_id <<<"$CLAIM")" -reason "thumbnail service timed out" | jq -c .
+q get -job "$JOB" | jq -c '{id, state, attempts, last_error}'
+q stats -queue demo | jq -c '{visible, delayed}'
+echo "while job $JOB waits out its backoff, worker-b gets the next job:"
 CLAIM=$(q claim -queue demo -worker worker-b)
 echo "worker-b claimed job $(jq -r .job.id <<<"$CLAIM")"
 q ack -job "$(jq -r .job.id <<<"$CLAIM")" -lease "$(jq -r .lease_id <<<"$CLAIM")" | jq -c .
+sleep 1.1
 
 echo
 echo "==> visibility timeout: worker-a claims with a 2s lease and never acks"
@@ -70,6 +71,18 @@ fi
 q ack -job "$JOB" -lease "$(jq -r .lease_id <<<"$CLAIM")" | jq -c .
 
 echo
+echo "==> dead-letter queue: a job with no retries left fails once more"
+POISON=$(q submit -queue demo -payload '{"task":"resize-image","n":"not-a-number"}' -max-retries 0 | jq -r .job_id)
+CLAIM=$(q claim -queue demo -worker worker-a)
+q nack -job "$POISON" -lease "$(jq -r .lease_id <<<"$CLAIM")" -reason "invalid payload" | jq -c .
+q dead -queue demo | jq -c '.jobs[] | {id, state, attempts, last_error}'
+q stats -queue demo | jq -c '{visible, dead}'
+echo "after fixing the bug, redrive it:"
+q redrive -job "$POISON" | jq -c .
+CLAIM=$(q claim -queue demo -worker worker-a)
+q ack -job "$(jq -r .job.id <<<"$CLAIM")" -lease "$(jq -r .lease_id <<<"$CLAIM")" | jq -c .
+
+echo
 echo "==> final state"
 q stats -queue demo | jq -c .
-q get -job "$JOB" | jq -c '{id, state, attempts, worker_id}'
+q get -job "$JOB" | jq -c '{id, state, attempts, worker_id, last_error}'

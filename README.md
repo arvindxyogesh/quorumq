@@ -6,9 +6,9 @@ at-least-once with visibility timeouts. Brokers replicate their state with Raft,
 so an acknowledged submit survives the crash of any minority of nodes,
 including the leader.
 
-> Work in progress. Milestones 1 (single-node queue) and 2 (Raft replication)
-> are done; retries and a dead-letter queue, observability, and load/chaos
-> results follow. The full design write-up lands with milestone 6.
+> Work in progress. Milestones 1-3 (single-node queue, Raft replication,
+> retries / dead-letter queue / snapshots) are done; observability and
+> load/chaos results follow. The full design write-up lands with milestone 6.
 
 ## Quick start
 
@@ -17,7 +17,7 @@ Requires Go 1.24+ and, for the scripts, `jq` and `curl`.
 ```sh
 make test          # unit tests, including in-process 3-node Raft clusters, with -race
 make integration   # 3 real server processes; SIGKILLs the leader twice mid-stream
-make demo          # single node: submit / claim / ack / nack / visibility timeout
+make demo          # single node: submit / claim / ack / nack + backoff / timeout / dead-letter / redrive
 ```
 
 ### A 3-node cluster
@@ -49,7 +49,32 @@ addresses and finds the leader itself.
 | `test/integration` | Process-level failover test |
 | `deploy/docker-compose.yml`, `Dockerfile` | 3-node local cluster |
 
-Every write (submit, claim, ack, nack) goes through the Raft leader and is
+## Job lifecycle
+
+```
+submit -> PENDING --claim--> LEASED --ack--> ACKED
+             ^                  |
+             |   nack, retries left: back to PENDING after 1s, 2s, 4s ... (capped)
+             +------------------+   lease expired: claimable again immediately
+                                |
+                                +-- nack or lease expiry after the last attempt --> DEAD
+                                                                  (RedriveJob -> PENDING)
+```
+
+A job may be delivered `max_retries + 1` times. Acks and nacks must present
+the lease from the claim that delivered the job; once a lease expires and the
+job is re-claimed, the old lease is rejected, so a slow worker cannot ack a
+job someone else now holds. Retrying an ack or nack with the same lease is a
+no-op.
+
+## Replication
+
+Every write (submit, claim, ack, nack, redrive) goes through the Raft leader and is
 acknowledged only after a quorum has it in its log. Reads use a Raft barrier on
 the leader, so they are linearizable. Followers answer with gRPC `UNAVAILABLE`
 plus a `google.rpc.ErrorInfo` naming the leader, and the client retries there.
+
+Raft snapshots the state machine every `-snapshot-threshold` entries and
+compacts its log, keeping `-trailing-logs` entries. A follower that falls
+further behind than that is sent the snapshot. A restarted node replays only
+the log entries after the last one its state machine applied.
