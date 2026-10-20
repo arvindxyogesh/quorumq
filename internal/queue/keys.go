@@ -7,7 +7,9 @@ import "encoding/binary"
 //	jobs/<id>                          -> JSON-encoded Job
 //	queues/<name>/<visibleAt><id>      -> one byte: the job's State
 //	counters/<name>/acked              -> uint64
-//	meta/next_id                       -> uint64
+//	meta/next_id                       -> uint64: last assigned job ID
+//	meta/applied                       -> uint64: last applied Raft log index
+//	meta/clock                         -> uint64: latest command time applied
 //
 // Each queue's index is sorted by (visibleAt, id), so the first key is always
 // the job that became visible earliest. A claim moves the key forward by the
@@ -19,8 +21,10 @@ var (
 	bucketCounters = []byte("counters")
 	bucketMeta     = []byte("meta")
 
-	keyNextID = []byte("next_id")
-	keyAcked  = []byte("acked")
+	keyNextID  = []byte("next_id")
+	keyApplied = []byte("applied")
+	keyClock   = []byte("clock")
+	keyAcked   = []byte("acked")
 )
 
 func idKey(id uint64) []byte {

@@ -7,7 +7,7 @@ import (
 // Get returns the job with the given ID.
 func (s *Store) Get(id uint64) (*Job, error) {
 	var j *Job
-	err := s.db.View(func(tx *bolt.Tx) error {
+	err := s.view(func(tx *bolt.Tx) error {
 		var err error
 		j, err = loadJob(tx, id)
 		return err
@@ -29,7 +29,7 @@ type Stats struct {
 // it costs O(jobs in the queue); acked jobs are not in the index.
 func (s *Store) Stats(queue string, now int64) (Stats, error) {
 	var st Stats
-	err := s.db.View(func(tx *bolt.Tx) error {
+	err := s.view(func(tx *bolt.Tx) error {
 		if c := tx.Bucket(bucketCounters).Bucket([]byte(queue)); c != nil {
 			st.Acked = getUint64(c.Get(keyAcked))
 		}

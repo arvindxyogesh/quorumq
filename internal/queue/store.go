@@ -1,21 +1,38 @@
 package queue
 
 import (
+	"errors"
 	"fmt"
+	"io"
+	"os"
+	"sync"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
 )
 
 // Store is a BoltDB-backed set of job queues. It is safe for concurrent use:
-// BoltDB serialises write transactions, and each operation is a single
-// transaction, so every operation is atomic.
+// BoltDB serialises write transactions, and each operation (or batch of Raft
+// entries) is a single transaction, so every operation is atomic.
 type Store struct {
+	path string
+
+	// mu guards db. Operations hold it for reading; Restore holds it for
+	// writing while it swaps in a new database file.
+	mu sync.RWMutex
 	db *bolt.DB
 }
 
 // Open opens (or creates) the store at path.
 func Open(path string) (*Store, error) {
+	db, err := openDB(path)
+	if err != nil {
+		return nil, err
+	}
+	return &Store{path: path, db: db}, nil
+}
+
+func openDB(path string) (*bolt.DB, error) {
 	db, err := bolt.Open(path, 0o600, &bolt.Options{Timeout: time.Second})
 	if err != nil {
 		return nil, fmt.Errorf("open bolt db %q: %w", path, err)
@@ -32,11 +49,97 @@ func Open(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("create buckets: %w", err)
 	}
-	return &Store{db: db}, nil
+	return db, nil
 }
 
 // Close closes the underlying database.
-func (s *Store) Close() error { return s.db.Close() }
+func (s *Store) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.db.Close()
+}
+
+func (s *Store) update(fn func(*bolt.Tx) error) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.db.Update(fn)
+}
+
+func (s *Store) view(fn func(*bolt.Tx) error) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.db.View(fn)
+}
+
+// Snapshot is a consistent, point-in-time view of the store. It holds a
+// BoltDB read transaction open until Release, so writes can continue while
+// the snapshot is being written out.
+type Snapshot struct {
+	tx *bolt.Tx
+}
+
+// Snapshot starts a snapshot of the current state.
+func (s *Store) Snapshot() (*Snapshot, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	tx, err := s.db.Begin(false)
+	if err != nil {
+		return nil, fmt.Errorf("begin snapshot: %w", err)
+	}
+	return &Snapshot{tx: tx}, nil
+}
+
+// WriteTo writes the snapshot as a complete BoltDB file.
+func (sn *Snapshot) WriteTo(w io.Writer) (int64, error) { return sn.tx.WriteTo(w) }
+
+// Release ends the snapshot's read transaction.
+func (sn *Snapshot) Release() { _ = sn.tx.Rollback() }
+
+// Restore replaces the store's entire state with a snapshot produced by
+// Snapshot.WriteTo. The snapshot is written to a temporary file first, so a
+// failed restore leaves the current state untouched.
+func (s *Store) Restore(r io.Reader) error {
+	tmp := s.path + ".restore"
+	if err := writeFileSync(tmp, r); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("write snapshot: %w", err)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.db.Close(); err != nil {
+		return fmt.Errorf("close db for restore: %w", err)
+	}
+	if err := os.Rename(tmp, s.path); err != nil {
+		return errors.Join(fmt.Errorf("install snapshot: %w", err), s.reopenLocked())
+	}
+	return s.reopenLocked()
+}
+
+func (s *Store) reopenLocked() error {
+	db, err := openDB(s.path)
+	if err != nil {
+		return err
+	}
+	s.db = db
+	return nil
+}
+
+func writeFileSync(path string, r io.Reader) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(f, r); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
+}
 
 func loadJob(tx *bolt.Tx, id uint64) (*Job, error) {
 	b := tx.Bucket(bucketJobs).Get(idKey(id))
