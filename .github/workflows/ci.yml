@@ -74,7 +74,12 @@ jobs:
           go-version: ${{ matrix.go != 'go.mod' && matrix.go || '' }}
           go-version-file: ${{ matrix.go == 'go.mod' && 'go.mod' || '' }}
       - name: Unit tests (race detector)
-        run: go test -race -count=1 ./...
+        run: |
+          set -o pipefail
+          go test -race -count=1 ./... 2>&1 | tee test.log
+      - name: Report failing tests as annotations
+        if: failure()
+        run: grep -E -- '--- FAIL|panic:|_test\.go:[0-9]+' test.log | head -50 | sed 's/^/::error::/' || true
 
   integration:
     runs-on: ubuntu-latest
@@ -84,7 +89,12 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Leader-kill integration test (race detector)
-        run: go test -tags integration -race -count=1 -v ./test/integration
+        run: |
+          set -o pipefail
+          go test -tags integration -race -count=1 -v ./test/integration 2>&1 | tee test.log
+      - name: Report failing tests as annotations
+        if: failure()
+        run: grep -E -- '--- FAIL|panic:|_test\.go:[0-9]+' test.log | head -50 | sed 's/^/::error::/' || true
 
   docker:
     runs-on: ubuntu-latest

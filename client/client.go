@@ -220,7 +220,7 @@ func (c *Client) Stats(ctx context.Context, queue string) (*pb.QueueStatsRespons
 // "try another node" until ctx is done.
 func (c *Client) call(ctx context.Context, fn func(context.Context, pb.QueueServiceClient) error) error {
 	backoff := c.opts.baseBackoff
-	var lastErr error // the most recent retryable error from the cluster
+	var lastErr error // the most informative retryable error so far
 	for {
 		addr, api, err := c.current()
 		if err != nil {
@@ -237,7 +237,12 @@ func (c *Client) call(ctx context.Context, fn func(context.Context, pb.QueueServ
 		case !retryable(err):
 			return err
 		}
-		lastErr = err
+		// Prefer the cluster's own answer (UNAVAILABLE: not the leader, node
+		// down) over a timed-out or cancelled attempt when explaining a
+		// failure later.
+		if lastErr == nil || status.Code(err) == codes.Unavailable {
+			lastErr = err
+		}
 
 		if leader := leaderHint(err); leader != "" && leader != addr {
 			c.redirect(addr, leader) // follow the hint straight away
