@@ -1,0 +1,24 @@
+{
+  "old_leader": "n3",
+  "old_term": 2,
+  "minority": "n3 n1",
+  "majority": "n2 n4 n5",
+  "partition_seconds": 30,
+  "majority_new_leader": "n5",
+  "majority_new_term": 3,
+  "majority_first_ack_ms": 2068.030866,
+  "minority_write_attempts": 784,
+  "minority_writes_acknowledged": 0,
+  "minority_read_attempts": 784,
+  "minority_reads_served": 0,
+  "old_leader_state_during_partition": "Candidate",
+  "minority_writes_surviving_after_heal": 0,
+  "minority_caught_up_ms_after_heal": 7284,
+  "all_replicas_converged_at_index": 92328,
+  "load": {
+    "acknowledged": 13626,
+    "completed": 13626,
+    "lost": 0,
+    "duplicates": 0
+  }
+}

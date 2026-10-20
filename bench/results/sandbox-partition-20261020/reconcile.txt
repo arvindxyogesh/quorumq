@@ -1,0 +1,4 @@
+partition-r1                             submitted   13701  lost 0
+partition-r2                             submitted   13626  lost 0
+partition-r3                             submitted   13575  lost 0
+total: 40902 acknowledged submits, 0 lost
