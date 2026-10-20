@@ -36,11 +36,24 @@ type AckCmd struct {
 	Now     int64  `json:"now"`
 }
 
-// NackCmd returns a leased job to its queue.
+// NackCmd reports that a leased job failed. The job is retried after an
+// exponential backoff (BackoffBase doubled per previous attempt, capped at
+// BackoffMax), or dead-lettered if it has no retries left. The backoff
+// settings travel in the command, so every replica computes the same delay.
 type NackCmd struct {
-	JobID   uint64 `json:"job_id"`
-	LeaseID string `json:"lease_id"`
-	Now     int64  `json:"now"`
+	JobID       uint64        `json:"job_id"`
+	LeaseID     string        `json:"lease_id"`
+	Reason      string        `json:"reason,omitempty"`
+	BackoffBase time.Duration `json:"backoff_base,omitempty"`
+	BackoffMax  time.Duration `json:"backoff_max,omitempty"`
+	Now         int64         `json:"now"`
+}
+
+// RedriveCmd moves a dead-lettered job back to its queue with a fresh retry
+// budget.
+type RedriveCmd struct {
+	JobID uint64 `json:"job_id"`
+	Now   int64  `json:"now"`
 }
 
 // Op identifies a command type.
@@ -52,16 +65,18 @@ const (
 	OpClaim
 	OpAck
 	OpNack
+	OpRedrive
 )
 
 // Command is the envelope written to the Raft log: exactly one of the
 // pointer fields is set, matching Op.
 type Command struct {
-	Op     Op         `json:"op"`
-	Submit *SubmitCmd `json:"submit,omitempty"`
-	Claim  *ClaimCmd  `json:"claim,omitempty"`
-	Ack    *AckCmd    `json:"ack,omitempty"`
-	Nack   *NackCmd   `json:"nack,omitempty"`
+	Op      Op          `json:"op"`
+	Submit  *SubmitCmd  `json:"submit,omitempty"`
+	Claim   *ClaimCmd   `json:"claim,omitempty"`
+	Ack     *AckCmd     `json:"ack,omitempty"`
+	Nack    *NackCmd    `json:"nack,omitempty"`
+	Redrive *RedriveCmd `json:"redrive,omitempty"`
 }
 
 // Encode serialises the command for the Raft log.
@@ -77,7 +92,7 @@ func DecodeCommand(b []byte) (Command, error) {
 }
 
 // Result is the outcome of applying one command. Err holds a domain error
-// (ErrNotFound, ErrLeaseMismatch, ErrBadCommand); storage failures are
+// (ErrNotFound, ErrLeaseMismatch, ErrNotDead, ErrBadCommand); storage failures are
 // reported separately, because they mean the state machine cannot continue.
 type Result struct {
 	JobID uint64
@@ -89,5 +104,6 @@ type Result struct {
 var ErrBadCommand = errors.New("invalid command")
 
 func isDomainError(err error) bool {
-	return errors.Is(err, ErrNotFound) || errors.Is(err, ErrLeaseMismatch) || errors.Is(err, ErrBadCommand)
+	return errors.Is(err, ErrNotFound) || errors.Is(err, ErrLeaseMismatch) ||
+		errors.Is(err, ErrNotDead) || errors.Is(err, ErrBadCommand)
 }

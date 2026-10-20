@@ -26,6 +26,9 @@ const (
 	StateLeased
 	// StateAcked means a worker acknowledged the job. Terminal.
 	StateAcked
+	// StateDead means the job ran out of retries and sits in its queue's
+	// dead-letter queue until it is redriven.
+	StateDead
 )
 
 func (s State) String() string {
@@ -36,6 +39,8 @@ func (s State) String() string {
 		return "leased"
 	case StateAcked:
 		return "acked"
+	case StateDead:
+		return "dead"
 	default:
 		return fmt.Sprintf("State(%d)", s)
 	}
@@ -56,7 +61,15 @@ type Job struct {
 	// nack so that a retried ack or nack with the same lease is a no-op.
 	LeaseID  string `json:"lease_id,omitempty"`
 	WorkerID string `json:"worker_id,omitempty"`
+	// LastError is the most recent failure: a nack reason or a lease expiry.
+	LastError string `json:"last_error,omitempty"`
+	// DeadAt is when the job was dead-lettered; zero unless State is StateDead.
+	DeadAt int64 `json:"dead_at,omitempty"`
 }
+
+// Exhausted reports whether the job has been delivered more than MaxRetries
+// times, i.e. its first attempt and all of its retries have been used.
+func (j *Job) Exhausted() bool { return j.Attempts > j.MaxRetries }
 
 func encodeJob(j *Job) ([]byte, error) { return json.Marshal(j) }
 
@@ -75,4 +88,6 @@ var (
 	// is not the job's current lease, for example because the lease expired
 	// and the job was re-claimed by another worker.
 	ErrLeaseMismatch = errors.New("lease is not the job's current lease")
+	// ErrNotDead is returned when redriving a job that is not dead-lettered.
+	ErrNotDead = errors.New("job is not in the dead-letter queue")
 )

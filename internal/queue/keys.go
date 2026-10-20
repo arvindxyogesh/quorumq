@@ -6,6 +6,7 @@ import "encoding/binary"
 //
 //	jobs/<id>                          -> JSON-encoded Job
 //	queues/<name>/<visibleAt><id>      -> one byte: the job's State
+//	dead/<name>/<deadAt><id>           -> empty: the queue's dead-letter queue
 //	counters/<name>/acked              -> uint64
 //	meta/next_id                       -> uint64: last assigned job ID
 //	meta/applied                       -> uint64: last applied Raft log index
@@ -18,6 +19,7 @@ import "encoding/binary"
 var (
 	bucketJobs     = []byte("jobs")
 	bucketQueues   = []byte("queues")
+	bucketDead     = []byte("dead")
 	bucketCounters = []byte("counters")
 	bucketMeta     = []byte("meta")
 

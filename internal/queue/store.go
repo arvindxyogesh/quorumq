@@ -38,7 +38,7 @@ func openDB(path string) (*bolt.DB, error) {
 		return nil, fmt.Errorf("open bolt db %q: %w", path, err)
 	}
 	err = db.Update(func(tx *bolt.Tx) error {
-		for _, name := range [][]byte{bucketJobs, bucketQueues, bucketCounters, bucketMeta} {
+		for _, name := range [][]byte{bucketJobs, bucketQueues, bucketDead, bucketCounters, bucketMeta} {
 			if _, err := tx.CreateBucketIfNotExists(name); err != nil {
 				return err
 			}
@@ -160,6 +160,11 @@ func putJob(tx *bolt.Tx, j *Job) error {
 // queueIndex returns the index bucket for a queue, creating it if needed.
 func queueIndex(tx *bolt.Tx, queue string) (*bolt.Bucket, error) {
 	return tx.Bucket(bucketQueues).CreateBucketIfNotExists([]byte(queue))
+}
+
+// deadIndex returns the dead-letter index for a queue, creating it if needed.
+func deadIndex(tx *bolt.Tx, queue string) (*bolt.Bucket, error) {
+	return tx.Bucket(bucketDead).CreateBucketIfNotExists([]byte(queue))
 }
 
 func queueCounters(tx *bolt.Tx, queue string) (*bolt.Bucket, error) {

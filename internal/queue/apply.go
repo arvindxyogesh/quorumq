@@ -41,6 +41,12 @@ func applyCommand(tx *bolt.Tx, cmd Command) (Result, error) {
 			return r, err
 		}
 		err = nackTx(tx, c)
+	case cmd.Op == OpRedrive && cmd.Redrive != nil:
+		c := *cmd.Redrive
+		if c.Now, err = advanceClock(tx, c.Now); err != nil {
+			return r, err
+		}
+		err = redriveTx(tx, c)
 	default:
 		err = fmt.Errorf("%w: op %d", ErrBadCommand, cmd.Op)
 	}
@@ -97,9 +103,19 @@ func (s *Store) Ack(cmd AckCmd) error {
 	return r.Err
 }
 
-// Nack returns a leased job to its queue.
+// Nack records a failed attempt: the job is retried after a backoff or
+// dead-lettered.
 func (s *Store) Nack(cmd NackCmd) error {
 	r, err := s.apply(Command{Op: OpNack, Nack: &cmd})
+	if err != nil {
+		return err
+	}
+	return r.Err
+}
+
+// Redrive moves a dead-lettered job back to its queue.
+func (s *Store) Redrive(cmd RedriveCmd) error {
+	r, err := s.apply(Command{Op: OpRedrive, Redrive: &cmd})
 	if err != nil {
 		return err
 	}
