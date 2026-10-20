@@ -15,8 +15,9 @@ quorumq ack    -job 42 -lease 9f3c...                            -> done
 
 > **Measured** (2-vCPU sandbox, every node and the load generator on one machine):
 > **0 of 534,247** acknowledged jobs lost, including **10 forced leader kills** under
-> load; leader failover in a median **1.33 s**; **1,348 jobs/s** end to end on a
-> 3-node cluster with p99 submit-to-ack latency of **94 ms** at 500 jobs/s.
+> load; leader failover in a median **1.33 s**; under a real 2|3 network partition
+> the minority side acknowledged **0 of 2,298** writes; **1,348 jobs/s** end to end
+> on a 3-node cluster with p99 submit-to-ack latency of **94 ms** at 500 jobs/s.
 > Details and caveats in [Results](#results).
 
 ## Contents
@@ -260,6 +261,18 @@ Take five nodes split 3 | 2, with the old leader on the minority side.
 
 With 3 nodes the cluster tolerates 1 failure; with 5, 2.
 
+**Tested, not just argued.** `TestPartitionMinorityLeader` partitions a 5-node
+cluster in-process (a fault-injecting stream layer under Raft's real TCP
+transport) and runs in CI. `scripts/partition.sh` does it to a real Docker
+cluster under load by dropping packets with iptables inside each container's
+network namespace, while sending writes and reads straight to the minority
+nodes with `quorumq -no-retry`. In three 30-second partitions the minority
+acknowledged **0 of 2,298 writes** and served **0 of 2,298 reads**, the old
+leader was a candidate (not leader) throughout, the majority acknowledged its
+first write 1.8-2.5 s after the cut, no write sent to the minority survived
+healing, and the load lost **0 of 40,902** jobs. See
+[`bench/results/sandbox-partition-20261020`](bench/results/sandbox-partition-20261020/summary.md).
+
 ## Limitations
 
 These are deliberate scope cuts for a portfolio project:
@@ -304,7 +317,10 @@ Dockerfile's base images; CI builds and tests the real image).
 | Submit-to-ack latency, 3 nodes | fixed 500 submits/s for 60 s | **p50 48.2 ms, p95 72.5 ms, p99 93.9 ms** (max 135.9) |
 | Leader failover time | 10 `docker kill`s of the leader, 15-25 s apart, under 300 submits/s | **median 1,329 ms** (957-1,524) |
 | Jobs lost across 10 leader kills | 92,452 acknowledged submits | **0** (55 duplicate deliveries) |
-| Jobs lost, all runs | 534,247 acknowledged submits | **0** |
+| Minority writes acknowledged during a network partition | 5 nodes split 2\|3 with the leader on the minority side, 3 runs x 30 s | **0 of 2,298** (reads served: 0 of 2,298) |
+| Partition: majority's first acknowledged write after the cut | same | **1.8-2.5 s** |
+| Partition: jobs lost | 40,902 acknowledged submits under load | **0** |
+| Jobs lost, all runs | 575,149 acknowledged submits | **0** |
 
 Latency under the closed-loop throughput runs (median of 3 runs):
 
@@ -394,6 +410,11 @@ Pods start in parallel (`podManagementPolicy: Parallel`): with ordered startup,
 pod 0 would wait to become ready, readiness needs a leader, and a leader needs a
 quorum of pods, so the cluster would never start.
 
+CI deploys these manifests to a kind cluster on every change
+(`scripts/k8s-smoke.sh`): it waits for the StatefulSet, does a CLI round trip
+inside the cluster, runs a load Job, force-deletes the leader pod mid-run and
+fails if any acknowledged job is lost.
+
 ### Benchmarks and chaos
 
 ```sh
@@ -403,6 +424,7 @@ go build -o bin/ ./cmd/...           # or drive the pieces by hand:
 scripts/cluster.sh up 3
 bin/quorumq-load run -addr $(scripts/cluster.sh addrs) -producers 32 -workers 64 -duration 30s
 scripts/chaos.sh 5 10 20 kills.jsonl # kill the leader 5 times, 10-20s apart, timing each failover
+sudo scripts/partition.sh out/ 30     # 5 nodes, 2|3 network partition for 30s (needs root for iptables)
 ```
 
 ### Configuration
@@ -422,8 +444,12 @@ scripts/chaos.sh 5 10 20 kills.jsonl # kill the leader 5 times, 10-20s apart, ti
 | State machine (`internal/queue`) | FIFO, visibility timeouts, lease checks and idempotent ack/nack, backoff, dead-lettering, redrive, idempotent log replay, monotonic time, snapshot/restore, concurrent claims never double-deliver |
 | Cluster (`internal/cluster`) | Real 3-node Raft clusters in one process: replication, redirects, committed jobs surviving leader loss, no re-apply after restart, a lagging follower installing a snapshot, rebuilding after losing `fsm.db`, stale acks rejected through Raft, empty claims not writing to the log, `/metrics` |
 | Client | Leader hints, skipping dead nodes, deadlines, no retries on application errors |
+| Partitions (`internal/cluster`) | 5 nodes split 2\|3 with the leader on the minority: no minority write acknowledged, old leader steps down and refuses reads, majority elects a newer-term leader, all replicas converge to exactly the acknowledged jobs; isolated follower catches up |
 | Integration (`test/integration`) | 3 real processes, 2000 jobs, the leader SIGKILLed twice mid-stream: every acknowledged submit processed, replicas converge |
 | Chaos (`scripts/chaos.sh`) | Docker cluster under load, the leader container killed repeatedly, every submit reconciled |
+| Partition (`scripts/partition.sh`) | Real 2\|3 network partition of a Docker cluster under load via iptables |
+| Kubernetes (`scripts/k8s-smoke.sh`, CI) | kind cluster: `kubectl apply -k deploy/k8s`, in-cluster load Job, leader pod force-deleted mid-run, 0 jobs lost |
+| Grafana (`scripts/grafana-check.sh`, CI) | Compose with Prometheus and Grafana: every dashboard query returns data through Grafana's data source |
 
 All Go tests run with the race detector in CI, on the Go version in `go.mod`
 and the latest stable release.
@@ -435,7 +461,15 @@ leader), `/status` (Raft role, term, log indexes) and `/metrics` on its admin
 port; the gRPC health service reports `quorumq.v1.QueueService` the same way as
 `/readyz`. The Grafana dashboard (`deploy/grafana`) shows the leader, job
 throughput, queue depth by state, latency percentiles by method, errors by
-code, commit latency, FSM batch sizes and replication lag.
+code, commit latency, FSM batch sizes and apply lag.
+
+![quorumq Grafana dashboard](docs/grafana-dashboard.png)
+
+*Taken by CI on a GitHub Actions runner while `scripts/grafana-check.sh` drove
+a 3-node Compose cluster at ~200 jobs/s for 45 s, with a few dead letters,
+redirected requests and a rejected stale ack. The same job runs every
+dashboard query through Grafana's data source and fails if any returns no
+data; that check caught two dashboard bugs before this screenshot.*
 
 | Metric | What it tells you |
 | --- | --- |
