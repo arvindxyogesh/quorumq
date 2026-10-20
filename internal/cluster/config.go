@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/raft"
+
 	"github.com/arvindxyogesh/quorumq/internal/metrics"
 )
 
@@ -103,6 +105,10 @@ type Config struct {
 	RaftLogLevel string
 	// Metrics receives replication metrics; nil disables them.
 	Metrics *metrics.Metrics
+	// RaftStream, if set, replaces the TCP listener and dialer under the
+	// Raft transport. Tests use it to inject network partitions; RaftBind
+	// and RaftAdvertise are then ignored.
+	RaftStream raft.StreamLayer
 }
 
 func (c *Config) self() (Peer, error) {

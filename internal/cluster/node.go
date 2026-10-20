@@ -110,12 +110,18 @@ func (n *Node) start() error {
 		return err
 	}
 
-	advertise, err := resolveWithRetry(cfg.RaftAdvertise, 30*time.Second)
-	if err != nil {
-		return fmt.Errorf("resolve raft advertise address %q: %w", cfg.RaftAdvertise, err)
-	}
-	if n.transport, err = raft.NewTCPTransportWithLogger(cfg.RaftBind, advertise, transportMaxPool, transportTimeout, hlog); err != nil {
-		return fmt.Errorf("start raft transport on %s: %w", cfg.RaftBind, err)
+	if cfg.RaftStream != nil {
+		n.transport = raft.NewNetworkTransportWithConfig(&raft.NetworkTransportConfig{
+			Stream: cfg.RaftStream, MaxPool: transportMaxPool, Timeout: transportTimeout, Logger: hlog,
+		})
+	} else {
+		advertise, err := resolveWithRetry(cfg.RaftAdvertise, 30*time.Second)
+		if err != nil {
+			return fmt.Errorf("resolve raft advertise address %q: %w", cfg.RaftAdvertise, err)
+		}
+		if n.transport, err = raft.NewTCPTransportWithLogger(cfg.RaftBind, advertise, transportMaxPool, transportTimeout, hlog); err != nil {
+			return fmt.Errorf("start raft transport on %s: %w", cfg.RaftBind, err)
+		}
 	}
 
 	rc := raft.DefaultConfig()

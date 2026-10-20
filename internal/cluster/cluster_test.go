@@ -18,7 +18,8 @@ import (
 type testCluster struct {
 	t     *testing.T
 	cfgs  []Config
-	nodes []*Node // nil while a node is stopped
+	nodes []*Node   // nil while a node is stopped
+	fnet  *faultNet // if set, nodes talk through it so tests can partition them
 }
 
 func freeAddr(t *testing.T) string {
@@ -38,11 +39,16 @@ func newTestCluster(t *testing.T, size int) *testCluster {
 
 func newTestClusterWith(t *testing.T, size int, snap SnapshotPolicy) *testCluster {
 	t.Helper()
+	return newTestClusterOn(t, size, snap, nil)
+}
+
+func newTestClusterOn(t *testing.T, size int, snap SnapshotPolicy, fnet *faultNet) *testCluster {
+	t.Helper()
 	peers := make([]Peer, size)
 	for i := range peers {
 		peers[i] = Peer{ID: fmt.Sprintf("n%d", i+1), RaftAddr: freeAddr(t), ClientAddr: fmt.Sprintf("client-n%d:7070", i+1)}
 	}
-	c := &testCluster{t: t, nodes: make([]*Node, size)}
+	c := &testCluster{t: t, nodes: make([]*Node, size), fnet: fnet}
 	for i, p := range peers {
 		c.cfgs = append(c.cfgs, Config{
 			NodeID: p.ID, RaftBind: p.RaftAddr, DataDir: t.TempDir(), Peers: peers, Bootstrap: true, RaftLogLevel: "off", Snapshot: snap,
@@ -60,7 +66,15 @@ func newTestClusterWith(t *testing.T, size int, snap SnapshotPolicy) *testCluste
 
 func (c *testCluster) start(i int) {
 	c.t.Helper()
-	n, err := NewNode(c.cfgs[i], slog.New(slog.NewTextHandler(io.Discard, nil)))
+	cfg := c.cfgs[i]
+	if c.fnet != nil {
+		stream, err := c.fnet.stream(cfg.RaftBind)
+		if err != nil {
+			c.t.Fatal(err)
+		}
+		cfg.RaftStream = stream
+	}
+	n, err := NewNode(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		c.t.Fatalf("start %s: %v", c.cfgs[i].NodeID, err)
 	}
