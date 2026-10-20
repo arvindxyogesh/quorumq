@@ -1,0 +1,117 @@
+syntax = "proto3";
+
+package quorumq.v1;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/arvindxyogesh/quorumq/api/quorumq/v1;quorumqv1";
+
+// QueueService is the public API of a quorumq broker.
+//
+// Delivery is at-least-once: a claimed job is hidden from other workers for
+// its visibility timeout and becomes claimable again if it is not acked
+// before the lease expires.
+service QueueService {
+  // SubmitJob durably enqueues a job and returns its ID.
+  rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
+  // ClaimJob leases the oldest visible job in a queue. The response has no
+  // job when nothing is currently claimable.
+  rpc ClaimJob(ClaimJobRequest) returns (ClaimJobResponse);
+  // AckJob marks a leased job as done. It fails with FAILED_PRECONDITION if
+  // the lease is no longer the job's current lease.
+  rpc AckJob(AckJobRequest) returns (AckJobResponse);
+  // NackJob returns a leased job to the queue so it can be retried.
+  rpc NackJob(NackJobRequest) returns (NackJobResponse);
+  // GetJob returns a job's current state.
+  rpc GetJob(GetJobRequest) returns (GetJobResponse);
+  // QueueStats returns counts for a queue.
+  rpc QueueStats(QueueStatsRequest) returns (QueueStatsResponse);
+}
+
+enum JobState {
+  JOB_STATE_UNSPECIFIED = 0;
+  // Waiting to be claimed.
+  JOB_STATE_PENDING = 1;
+  // Claimed by a worker; the lease may have expired but nobody has
+  // re-claimed the job yet.
+  JOB_STATE_LEASED = 2;
+  // Acknowledged by a worker. Terminal.
+  JOB_STATE_ACKED = 3;
+}
+
+message Job {
+  string id = 1;
+  string queue = 2;
+  bytes payload = 3;
+  JobState state = 4;
+  // Number of times the job has been claimed.
+  uint32 attempts = 5;
+  uint32 max_retries = 6;
+  google.protobuf.Timestamp created_at = 7;
+  // When the job next becomes claimable. Unset once the job is acked.
+  google.protobuf.Timestamp visible_at = 8;
+  // The worker that most recently claimed the job.
+  string worker_id = 9;
+}
+
+message SubmitJobRequest {
+  string queue = 1;
+  bytes payload = 2;
+  uint32 max_retries = 3;
+}
+
+message SubmitJobResponse {
+  string job_id = 1;
+}
+
+message ClaimJobRequest {
+  string queue = 1;
+  string worker_id = 2;
+  // How long the job stays hidden from other workers. Defaults to 30s.
+  google.protobuf.Duration visibility_timeout = 3;
+}
+
+message ClaimJobResponse {
+  // Unset when the queue has no claimable job.
+  Job job = 1;
+  // Token that must be presented to ack or nack this delivery.
+  string lease_id = 2;
+  google.protobuf.Timestamp lease_expires_at = 3;
+}
+
+message AckJobRequest {
+  string job_id = 1;
+  string lease_id = 2;
+}
+
+message AckJobResponse {}
+
+message NackJobRequest {
+  string job_id = 1;
+  string lease_id = 2;
+}
+
+message NackJobResponse {}
+
+message GetJobRequest {
+  string job_id = 1;
+}
+
+message GetJobResponse {
+  Job job = 1;
+}
+
+message QueueStatsRequest {
+  string queue = 1;
+}
+
+message QueueStatsResponse {
+  string queue = 1;
+  // Jobs claimable right now, including jobs whose lease has expired.
+  uint64 visible = 2;
+  // Jobs leased to a worker whose lease has not expired.
+  uint64 in_flight = 3;
+  // Jobs acknowledged since the queue was created.
+  uint64 acked = 4;
+}

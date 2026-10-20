@@ -1,0 +1,25 @@
+version: "2"
+
+linters:
+  enable:
+    - errorlint
+    - gocritic
+    - misspell
+    - revive
+    - unconvert
+  settings:
+    revive:
+      rules:
+        # Exported methods on types that implement an interface (the gRPC
+        # service, the broker) are documented on the interface.
+        - name: exported
+          disabled: true
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/arvindxyogesh/quorumq
