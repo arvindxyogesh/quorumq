@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: go vet
+        run: |
+          go vet ./...
+          go vet -tags integration ./test/...
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.5.0
+      - name: golangci-lint (integration tests)
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.5.0
+          args: --build-tags integration ./test/...
+      - name: go mod tidy is clean
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+  proto:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install buf and protoc plugins
+        run: |
+          go install github.com/bufbuild/buf/cmd/buf@v1.50.0
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.6
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
+      - name: buf lint
+        run: buf lint
+      - name: Generated code is up to date
+        run: |
+          buf generate
+          git diff --exit-code api/
+
+  test:
+    name: test (Go ${{ matrix.go }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The version go.mod declares, and the latest stable release.
+        go: [go.mod, stable]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go != 'go.mod' && matrix.go || '' }}
+          go-version-file: ${{ matrix.go == 'go.mod' && 'go.mod' || '' }}
+      - name: Unit tests (race detector)
+        run: go test -race -count=1 ./...
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Leader-kill integration test (race detector)
+        run: go test -tags integration -race -count=1 -v ./test/integration
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t quorumq:dev .
+      - name: Compose failover demo on the real image
+        run: NO_BUILD=1 ./scripts/compose-failover.sh
+
+  manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Kubernetes manifests
+        run: |
+          curl -sSfL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar xz kubeconform
+          kubectl kustomize deploy/k8s | ./kubeconform -strict -summary -kubernetes-version 1.31.0 -
+      - name: Validate Prometheus config and dashboard
+        run: |
+          python3 -m json.tool deploy/grafana/dashboards/quorumq.json > /dev/null
+          docker run --rm --entrypoint promtool -v "$PWD/deploy/prometheus:/cfg:ro" prom/prometheus:v3.1.0 check config /cfg/prometheus.yml
+      - name: Validate Compose file
+        run: docker compose -f deploy/docker-compose.yml --profile observability config --quiet

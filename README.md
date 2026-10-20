@@ -1,13 +1,15 @@
 # quorumq
 
+[![CI](https://github.com/arvindxyogesh/quorumq/actions/workflows/ci.yml/badge.svg)](https://github.com/arvindxyogesh/quorumq/actions/workflows/ci.yml)
+
 A fault-tolerant distributed job queue in Go (a simplified SQS / Celery broker).
 Producers submit jobs, workers claim and acknowledge them, and delivery is
 at-least-once with visibility timeouts. Brokers replicate their state with Raft,
 so an acknowledged submit survives the crash of any minority of nodes,
 including the leader.
 
-> Work in progress. Milestones 1-3 (single-node queue, Raft replication,
-> retries / dead-letter queue / snapshots) are done; observability and
+> Work in progress. Milestones 1-4 (single-node queue, Raft replication,
+> retries / dead-letter queue / snapshots, observability and ops) are done;
 > load/chaos results follow. The full design write-up lands with milestone 6.
 
 ## Quick start
@@ -31,6 +33,19 @@ curl -s localhost:8081/status        # role, term, leader, log indexes
 make failover-demo                   # docker kill the leader and watch a new one take over
 ```
 
+Add `--profile observability` to `docker compose ... up` for Prometheus
+(localhost:9090) and Grafana with the quorumq dashboard (localhost:3000).
+
+On Kubernetes (3-pod StatefulSet, headless Service for Raft, client Service,
+PodDisruptionBudget):
+
+```sh
+docker build -t quorumq:dev . && kind load docker-image quorumq:dev   # or push to your registry
+kubectl apply -k deploy/k8s
+kubectl port-forward svc/quorumq 7070 &
+go run ./cmd/quorumq -addr localhost:7070 stats -queue demo
+```
+
 Without Docker, start three processes (see the comment at the top of
 `cmd/quorumq-server/main.go`). The CLI takes any subset of the node
 addresses and finds the leader itself.
@@ -47,7 +62,10 @@ addresses and finds the leader itself.
 | `client` | Go client: finds the leader, follows redirects, retries across failover |
 | `cmd/quorumq-server`, `cmd/quorumq` | Broker binary and CLI |
 | `test/integration` | Process-level failover test |
-| `deploy/docker-compose.yml`, `Dockerfile` | 3-node local cluster |
+| `internal/metrics` | Prometheus metrics and the scrape-time collector |
+| `deploy/docker-compose.yml`, `Dockerfile` | 3-node local cluster (+ Prometheus and Grafana profile) |
+| `deploy/k8s` | Kubernetes manifests (kustomize) |
+| `deploy/grafana`, `deploy/prometheus` | Dashboard and scrape config |
 
 ## Job lifecycle
 
@@ -78,3 +96,25 @@ Raft snapshots the state machine every `-snapshot-threshold` entries and
 compacts its log, keeping `-trailing-logs` entries. A follower that falls
 further behind than that is sent the snapshot. A restarted node replays only
 the log entries after the last one its state machine applied.
+
+## Operations
+
+Each node serves `/healthz` (liveness), `/readyz` (ready once it knows a
+leader), `/status` (Raft role, term, log indexes) and `/metrics` on its admin
+port. The gRPC health service reports `quorumq.v1.QueueService` as SERVING on
+the same condition as `/readyz`.
+
+| Metric | What it tells you |
+| --- | --- |
+| `quorumq_jobs_{submitted,claimed,acked,nacked,dead_lettered,redriven}_total{queue}` | Job flow, counted by the node that served it (the leader) |
+| `quorumq_queue_jobs{queue,state}` | Depth by state (`visible`, `in_flight`, `delayed`, `dead`) from each replica |
+| `quorumq_grpc_request_duration_seconds{method}`, `quorumq_grpc_requests_total{method,code}` | API latency and errors |
+| `quorumq_raft_apply_duration_seconds{op}` | Leader-side time to commit a command to a quorum and apply it |
+| `quorumq_fsm_apply_batch_{entries,duration_seconds}` | How many log entries share each BoltDB transaction |
+| `quorumq_raft_is_leader`, `quorumq_raft_leader_changes_total`, `quorumq_raft_term`, `quorumq_raft_index{kind}` | Leadership and replication progress |
+
+CI (GitHub Actions) runs vet, gofmt, golangci-lint, `go mod tidy` and
+generated-code drift checks, buf lint, race-enabled unit tests on the go.mod
+Go version and latest stable, the leader-kill integration test, a Docker
+build plus the Compose failover demo on the real image, and kubeconform /
+promtool validation of the deploy files.

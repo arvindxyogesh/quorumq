@@ -1,4 +1,4 @@
-.PHONY: build test integration lint proto demo cluster-up cluster-down failover-demo clean
+.PHONY: build test integration lint proto demo cluster-up cluster-down observability-up failover-demo k8s-apply clean
 
 build:
 	go build -o bin/ ./cmd/...
@@ -27,7 +27,14 @@ cluster-up:
 	docker compose -f deploy/docker-compose.yml up -d --build
 
 cluster-down:
-	docker compose -f deploy/docker-compose.yml down -v
+	docker compose -f deploy/docker-compose.yml --profile observability down -v
+
+# The cluster plus Prometheus (localhost:9090) and Grafana (localhost:3000).
+observability-up:
+	docker compose -f deploy/docker-compose.yml --profile observability up -d --build
+
+k8s-apply:
+	kubectl apply -k deploy/k8s
 
 failover-demo:
 	./scripts/compose-failover.sh
