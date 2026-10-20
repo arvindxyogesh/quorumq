@@ -776,7 +776,7 @@
       "type": "timeseries",
       "title": "Apply lag (entries)",
       "id": 18,
-      "description": "How far each node's state machine is behind the highest known commit index. A restarted node spikes, then catches up.",
+      "description": "Log entries each node knows are committed but has not yet applied, from that node's own commit and applied indexes (same scrape). Comparing indexes across nodes would mostly measure the gap between their scrape times. A restarted node spikes, then catches up.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -794,7 +794,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max(quorumq_raft_index{kind=\"commit\"}) - on() group_right() quorumq_raft_index{kind=\"applied\"}",
+          "expr": "quorumq_raft_index{kind=\"commit\"} - quorumq_raft_index{kind=\"applied\"}",
           "legendFormat": "{{instance}}",
           "range": true
         }
