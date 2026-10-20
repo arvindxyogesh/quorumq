@@ -226,3 +226,27 @@ func TestParsePeers(t *testing.T) {
 		}
 	}
 }
+
+// Polling an empty queue must not grow the Raft log.
+func TestEmptyClaimsDoNotWriteToTheLog(t *testing.T) {
+	c := newTestCluster(t, 3)
+	leader := c.waitForLeader()
+	b := NewBroker(c.nodes[leader], broker.DefaultRetryPolicy)
+	ctx := context.Background()
+	if _, err := b.Submit(ctx, "q", []byte("x"), 0); err != nil {
+		t.Fatal(err)
+	}
+	if j, err := b.Claim(ctx, "q", "w", time.Minute); err != nil || j == nil {
+		t.Fatalf("claim: %+v, %v", j, err)
+	}
+
+	before := c.nodes[leader].raft.LastIndex()
+	for i := 0; i < 50; i++ {
+		if j, err := b.Claim(ctx, "q", "w", time.Minute); err != nil || j != nil {
+			t.Fatalf("empty claim %d: %+v, %v", i, j, err)
+		}
+	}
+	if after := c.nodes[leader].raft.LastIndex(); after != before {
+		t.Fatalf("50 empty claims grew the log from %d to %d", before, after)
+	}
+}

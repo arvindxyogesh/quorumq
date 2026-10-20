@@ -52,10 +52,25 @@ func (b *Broker) Submit(ctx context.Context, queueName string, payload []byte, m
 	return r.JobID, r.Err
 }
 
+// Claim leases the next visible job through the log. If the leader's own
+// replica shows nothing claimable it answers "empty" without writing to the
+// log: workers polling idle queues would otherwise cost a quorum fsync per
+// poll. The shortcut can only err towards a spurious empty answer (the
+// leader's state machine may trail the commit index by a few entries, or the
+// node may have just been deposed), which a polling worker simply retries;
+// a job is only ever handed out by a committed log entry.
 func (b *Broker) Claim(ctx context.Context, queueName, workerID string, visibility time.Duration) (*queue.Job, error) {
+	now := b.now()
+	if !b.node.IsLeader() {
+		return nil, b.notLeader()
+	}
+	if visible, err := b.node.store.HasVisible(queueName, now.UnixNano()); err == nil && !visible {
+		b.metrics.JobClaimed(queueName, true)
+		return nil, nil
+	}
 	r, err := b.propose(ctx, "claim", queue.Command{Op: queue.OpClaim, Claim: &queue.ClaimCmd{
 		Queue: queueName, WorkerID: workerID, LeaseID: broker.NewLeaseID(),
-		VisibilityTimeout: visibility, Now: b.now().UnixNano(),
+		VisibilityTimeout: visibility, Now: now.UnixNano(),
 	}})
 	if err != nil {
 		return nil, err

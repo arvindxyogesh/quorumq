@@ -375,3 +375,21 @@ func TestQueuesListsEveryQueue(t *testing.T) {
 		t.Fatalf("Queues() = %v, %v", got, err)
 	}
 }
+
+func TestHasVisible(t *testing.T) {
+	s := openTestStore(t)
+	if ok, _ := s.HasVisible("q", t0); ok {
+		t.Fatal("empty queue reported a visible job")
+	}
+	mustSubmit(t, s, "q", "x", t0)
+	if ok, _ := s.HasVisible("q", t0); !ok {
+		t.Fatal("submitted job not visible")
+	}
+	claim(t, s, "q", "l1", 10*time.Second, t0)
+	if ok, _ := s.HasVisible("q", at(9*time.Second)); ok {
+		t.Fatal("leased job reported visible before its lease expired")
+	}
+	if ok, _ := s.HasVisible("q", at(10*time.Second)); !ok {
+		t.Fatal("expired lease not reported visible")
+	}
+}

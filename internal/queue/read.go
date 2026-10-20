@@ -17,6 +17,25 @@ func (s *Store) Get(id uint64) (*Job, error) {
 	return j, err
 }
 
+// HasVisible reports whether a claim at now would find a job to lease (or an
+// exhausted lease to dead-letter). It reads only the first index key, so it
+// is cheap enough to check before every claim.
+func (s *Store) HasVisible(queue string, now int64) (bool, error) {
+	var visible bool
+	err := s.view(func(tx *bolt.Tx) error {
+		idx := tx.Bucket(bucketQueues).Bucket([]byte(queue))
+		if idx == nil {
+			return nil
+		}
+		if k, _ := idx.Cursor().First(); k != nil {
+			visibleAt, _ := parseIndexKey(k)
+			visible = visibleAt <= now
+		}
+		return nil
+	})
+	return visible, err
+}
+
 // Stats are counts for one queue at a point in time.
 type Stats struct {
 	// Visible jobs can be claimed now, including jobs whose lease expired.
