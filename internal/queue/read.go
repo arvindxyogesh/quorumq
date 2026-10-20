@@ -1,6 +1,8 @@
 package queue
 
 import (
+	"sort"
+
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -82,4 +84,27 @@ func (s *Store) ListDead(queue string, limit int) ([]*Job, error) {
 		return nil
 	})
 	return jobs, err
+}
+
+// Queues returns the names of every queue that has ever held a job.
+func (s *Store) Queues() ([]string, error) {
+	seen := make(map[string]bool)
+	var names []string
+	err := s.view(func(tx *bolt.Tx) error {
+		for _, b := range [][]byte{bucketQueues, bucketDead, bucketCounters} {
+			err := tx.Bucket(b).ForEach(func(k, _ []byte) error {
+				if name := string(k); !seen[name] {
+					seen[name] = true
+					names = append(names, name)
+				}
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	sort.Strings(names)
+	return names, err
 }

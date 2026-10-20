@@ -34,13 +34,13 @@ func applyCommand(tx *bolt.Tx, cmd Command) (Result, error) {
 		if c.Now, err = advanceClock(tx, c.Now); err != nil {
 			return r, err
 		}
-		err = ackTx(tx, c)
+		r.Job, err = ackTx(tx, c)
 	case cmd.Op == OpNack && cmd.Nack != nil:
 		c := *cmd.Nack
 		if c.Now, err = advanceClock(tx, c.Now); err != nil {
 			return r, err
 		}
-		err = nackTx(tx, c)
+		r.Job, err = nackTx(tx, c)
 	case cmd.Op == OpRedrive && cmd.Redrive != nil:
 		c := *cmd.Redrive
 		if c.Now, err = advanceClock(tx, c.Now); err != nil {

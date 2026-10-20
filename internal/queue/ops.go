@@ -112,57 +112,57 @@ func checkLease(tx *bolt.Tx, jobID uint64, leaseID string, doneStates ...State) 
 // re-claimed, even if its visibility timeout has passed: acking late is
 // harmless as long as nobody else holds the job. Retrying a successful ack
 // with the same lease is a no-op.
-func ackTx(tx *bolt.Tx, cmd AckCmd) error {
+func ackTx(tx *bolt.Tx, cmd AckCmd) (*Job, error) {
 	j, done, err := checkLease(tx, cmd.JobID, cmd.LeaseID, StateAcked)
 	if err != nil || done {
-		return err
+		return j, err
 	}
 	idx, err := queueIndex(tx, j.Queue)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := idx.Delete(indexKey(j.VisibleAt, j.ID)); err != nil {
-		return err
+		return nil, err
 	}
 	j.State = StateAcked
 	j.VisibleAt = 0
 	if err := putJob(tx, j); err != nil {
-		return err
+		return nil, err
 	}
 	counters, err := queueCounters(tx, j.Queue)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	_, err = incr(counters, keyAcked)
-	return err
+	return j, err
 }
 
 // nackTx records a failed attempt. If the job has retries left it becomes
 // claimable again after an exponential backoff; otherwise it is
 // dead-lettered. Retrying a successful nack with the same lease is a no-op.
-func nackTx(tx *bolt.Tx, cmd NackCmd) error {
+func nackTx(tx *bolt.Tx, cmd NackCmd) (*Job, error) {
 	j, done, err := checkLease(tx, cmd.JobID, cmd.LeaseID, StatePending, StateDead)
 	if err != nil || done {
-		return err
+		return j, err
 	}
 	idx, err := queueIndex(tx, j.Queue)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	j.LastError = cmd.Reason
 	if j.LastError == "" {
 		j.LastError = "nacked"
 	}
 	if j.Exhausted() {
-		return deadLetterTx(tx, idx, j, cmd.Now)
+		return j, deadLetterTx(tx, idx, j, cmd.Now)
 	}
 	old := j.VisibleAt
 	j.State = StatePending
 	j.VisibleAt = cmd.Now + int64(RetryDelay(j.Attempts, cmd.BackoffBase, cmd.BackoffMax))
 	if err := reindex(idx, j, old); err != nil {
-		return err
+		return nil, err
 	}
-	return putJob(tx, j)
+	return j, putJob(tx, j)
 }
 
 // RetryDelay is the backoff before retrying a job that has failed attempt

@@ -95,9 +95,11 @@ func DecodeCommand(b []byte) (Command, error) {
 // (ErrNotFound, ErrLeaseMismatch, ErrNotDead, ErrBadCommand); storage failures are
 // reported separately, because they mean the state machine cannot continue.
 type Result struct {
+	// JobID is set by a submit.
 	JobID uint64
-	Job   *Job
-	Err   error
+	// Job is the job after a claim (nil if the queue was empty), ack or nack.
+	Job *Job
+	Err error
 }
 
 // ErrBadCommand is returned for a log entry that is not a valid command.

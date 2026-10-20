@@ -364,3 +364,14 @@ func TestConcurrentClaimsDeliverEachJobOnce(t *testing.T) {
 		t.Fatalf("final stats %+v", st)
 	}
 }
+
+func TestQueuesListsEveryQueue(t *testing.T) {
+	s := openTestStore(t)
+	mustSubmit(t, s, "b", "x", t0)
+	mustSubmit(t, s, "a", "x", t0)
+	mustSubmit(t, s, "a", "x", t0)
+	got, err := s.Queues()
+	if err != nil || len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Fatalf("Queues() = %v, %v", got, err)
+	}
+}
