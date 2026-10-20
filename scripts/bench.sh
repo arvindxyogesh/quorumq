@@ -93,6 +93,9 @@ wait "$LOAD_PID"
 cat "$OUT/chaos-load.txt"
 scripts/cluster.sh down
 
+# Keep the per-job ID files, compressed, for auditing with scripts/reconcile.sh.
+find "$OUT" -name '*.csv' -exec gzip -9 {} +
+scripts/reconcile.sh "$OUT" > "$OUT/reconcile.txt"
 scripts/bench-report.sh "$OUT" > "$OUT/summary.md"
 echo "==> wrote $OUT/summary.md"
 cat "$OUT/summary.md"
