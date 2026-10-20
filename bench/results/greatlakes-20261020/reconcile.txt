@@ -1,0 +1,18 @@
+chaos                                    submitted   93075  lost 0
+latency/r1000                            submitted   59993  lost 0
+latency/r2000                            submitted  119968  lost 0
+latency/r500                             submitted   29984  lost 0
+saturation/n3-p128-w256                  submitted  323288  lost 0
+saturation/n3-p64-w128                   submitted  292045  lost 0
+saturation/n5-p128-w256                  submitted  265686  lost 0
+saturation/n5-p64-w128                   submitted  220889  lost 0
+throughput/n1-r1                         submitted  259283  lost 0
+throughput/n1-r2                         submitted  267636  lost 0
+throughput/n1-r3                         submitted  270402  lost 0
+throughput/n3-r1                         submitted  160477  lost 0
+throughput/n3-r2                         submitted  167662  lost 0
+throughput/n3-r3                         submitted  170872  lost 0
+throughput/n5-r1                         submitted  200677  lost 0
+throughput/n5-r2                         submitted  196521  lost 0
+throughput/n5-r3                         submitted  198885  lost 0
+total: 3297343 acknowledged submits, 0 lost

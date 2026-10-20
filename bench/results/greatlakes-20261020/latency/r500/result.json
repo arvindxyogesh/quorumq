@@ -1,0 +1,358 @@
+{
+  "label": "latency nodes=3 rate=500",
+  "addrs": "gl3420:7070,gl3421:7070,gl3422:7070",
+  "config": {
+    "Queue": "latency",
+    "Producers": 32,
+    "Workers": 64,
+    "Rate": 500,
+    "Duration": 60000000000,
+    "PayloadSize": 256,
+    "Visibility": 30000000000,
+    "MaxRetries": 5,
+    "DrainTimeout": 120000000000,
+    "IdleSleep": 2000000,
+    "RequestTimeout": 30000000000,
+    "RunID": "dm9w3vj68tjs"
+  },
+  "started_at": "2026-10-20T14:50:54.490008049-04:00",
+  "gomaxprocs": 6,
+  "num_cpu": 6,
+  "window_seconds": 60,
+  "drain_seconds": 0.002277885,
+  "submits_acknowledged": 29984,
+  "submit_errors": 0,
+  "jobs_completed": 29984,
+  "jobs_lost": 0,
+  "duplicate_completions": 0,
+  "stale_acks_rejected": 0,
+  "ack_errors": 0,
+  "claim_errors": 0,
+  "empty_claims": 1230096,
+  "submit_rate_per_sec": 499.73333333333335,
+  "ack_rate_per_sec": 499.73333333333335,
+  "backlog_at_window_end": 0,
+  "submit_to_ack_latency_ms": {
+    "count": 29984,
+    "p50": 9.52382,
+    "p95": 11.476113,
+    "p99": 12.5497,
+    "max": 17.546567,
+    "mean": 9.627757176994434
+  },
+  "submit_latency_ms": {
+    "count": 29984,
+    "p50": 4.05593,
+    "p95": 5.222998,
+    "p99": 5.912584,
+    "max": 9.157709,
+    "mean": 4.112791210012041
+  },
+  "per_second": [
+    {
+      "t": 0,
+      "submitted": 480,
+      "completed": 480
+    },
+    {
+      "t": 1,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 2,
+      "submitted": 480,
+      "completed": 480
+    },
+    {
+      "t": 3,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 4,
+      "submitted": 512,
+      "completed": 480
+    },
+    {
+      "t": 5,
+      "submitted": 480,
+      "completed": 512
+    },
+    {
+      "t": 6,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 7,
+      "submitted": 480,
+      "completed": 480
+    },
+    {
+      "t": 8,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 9,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 10,
+      "submitted": 480,
+      "completed": 480
+    },
+    {
+      "t": 11,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 12,
+      "submitted": 512,
+      "completed": 485
+    },
+    {
+      "t": 13,
+      "submitted": 480,
+      "completed": 507
+    },
+    {
+      "t": 14,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 15,
+      "submitted": 480,
+      "completed": 480
+    },
+    {
+      "t": 16,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 17,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 18,
+      "submitted": 480,
+      "completed": 480
+    },
+    {
+      "t": 19,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 20,
+      "submitted": 512,
+      "completed": 480
+    },
+    {
+      "t": 21,
+      "submitted": 480,
+      "completed": 512
+    },
+    {
+      "t": 22,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 23,
+      "submitted": 480,
+      "completed": 480
+    },
+    {
+      "t": 24,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 25,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 26,
+      "submitted": 480,
+      "completed": 480
+    },
+    {
+      "t": 27,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 28,
+      "submitted": 512,
+      "completed": 480
+    },
+    {
+      "t": 29,
+      "submitted": 480,
+      "completed": 512
+    },
+    {
+      "t": 30,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 31,
+      "submitted": 480,
+      "completed": 480
+    },
+    {
+      "t": 32,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 33,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 34,
+      "submitted": 480,
+      "completed": 480
+    },
+    {
+      "t": 35,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 36,
+      "submitted": 512,
+      "completed": 480
+    },
+    {
+      "t": 37,
+      "submitted": 480,
+      "completed": 512
+    },
+    {
+      "t": 38,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 39,
+      "submitted": 480,
+      "completed": 480
+    },
+    {
+      "t": 40,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 41,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 42,
+      "submitted": 480,
+      "completed": 480
+    },
+    {
+      "t": 43,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 44,
+      "submitted": 512,
+      "completed": 480
+    },
+    {
+      "t": 45,
+      "submitted": 480,
+      "completed": 512
+    },
+    {
+      "t": 46,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 47,
+      "submitted": 480,
+      "completed": 480
+    },
+    {
+      "t": 48,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 49,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 50,
+      "submitted": 480,
+      "completed": 480
+    },
+    {
+      "t": 51,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 52,
+      "submitted": 512,
+      "completed": 484
+    },
+    {
+      "t": 53,
+      "submitted": 480,
+      "completed": 508
+    },
+    {
+      "t": 54,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 55,
+      "submitted": 480,
+      "completed": 480
+    },
+    {
+      "t": 56,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 57,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 58,
+      "submitted": 480,
+      "completed": 480
+    },
+    {
+      "t": 59,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 60,
+      "submitted": 0,
+      "completed": 0
+    }
+  ]
+}

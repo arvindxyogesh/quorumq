@@ -29,11 +29,11 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.5.0
+          version: v2.15.0
       - name: golangci-lint (integration tests)
         uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.5.0
+          version: v2.15.0
           args: --build-tags integration ./test/...
       - name: go mod tidy is clean
         run: |

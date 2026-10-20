@@ -1,0 +1,1658 @@
+{
+  "label": "chaos nodes=3 rate=300 kills=10",
+  "addrs": "gl3420:7070,gl3421:7070,gl3422:7070",
+  "config": {
+    "Queue": "chaos",
+    "Producers": 32,
+    "Workers": 64,
+    "Rate": 300,
+    "Duration": 320000000000,
+    "PayloadSize": 256,
+    "Visibility": 5000000000,
+    "MaxRetries": 5,
+    "DrainTimeout": 180000000000,
+    "IdleSleep": 2000000,
+    "RequestTimeout": 30000000000,
+    "RunID": "dm9w6a2tz5b4"
+  },
+  "started_at": "2026-10-20T14:54:02.882006434-04:00",
+  "gomaxprocs": 6,
+  "num_cpu": 6,
+  "window_seconds": 320,
+  "drain_seconds": 0.040154188,
+  "submits_acknowledged": 93075,
+  "submit_errors": 0,
+  "jobs_completed": 93075,
+  "jobs_lost": 0,
+  "duplicate_completions": 3,
+  "stale_acks_rejected": 0,
+  "ack_errors": 0,
+  "claim_errors": 0,
+  "empty_claims": 4531647,
+  "submit_rate_per_sec": 290.85625,
+  "ack_rate_per_sec": 290.85625,
+  "backlog_at_window_end": 1,
+  "submit_to_ack_latency_ms": {
+    "count": 93075,
+    "p50": 7.665599,
+    "p95": 11.949285,
+    "p99": 20.101942,
+    "max": 2355.28516,
+    "mean": 12.827530051485358
+  },
+  "submit_latency_ms": {
+    "count": 93075,
+    "p50": 2.79712,
+    "p95": 5.112418,
+    "p99": 10.775571,
+    "max": 2351.050264,
+    "mean": 7.556424525382752
+  },
+  "per_second": [
+    {
+      "t": 0,
+      "submitted": 288,
+      "completed": 288
+    },
+    {
+      "t": 1,
+      "submitted": 288,
+      "completed": 288
+    },
+    {
+      "t": 2,
+      "submitted": 320,
+      "completed": 320
+    },
+    {
+      "t": 3,
+      "submitted": 288,
+      "completed": 288
+    },
+    {
+      "t": 4,
+      "submitted": 288,
+      "completed": 288
+    },
+    {
+      "t": 5,
+      "submitted": 320,
+      "completed": 320
+    },
+    {
+      "t": 6,
+      "submitted": 288,
+      "completed": 288
+    },
+    {
+      "t": 7,
+      "submitted": 288,
+      "completed": 288
+    },
+    {
+      "t": 8,
+      "submitted": 320,
+      "completed": 320
+    },
+    {
+      "t": 9,
+      "submitted": 288,
+      "completed": 288
+    },
+    {
+      "t": 10,
+      "submitted": 320,
+      "completed": 320
+    },
+    {
+      "t": 11,
+      "submitted": 288,
+      "completed": 288
+    },
+    {
+      "t": 12,
+      "submitted": 288,
+      "completed": 288
+    },
+    {
+      "t": 13,
+      "submitted": 320,
+      "completed": 320
+    },
+    {
+      "t": 14,
+      "submitted": 288,
+      "completed": 288
+    },
+    {
+      "t": 15,
+      "submitted": 288,
+      "completed": 288
+    },
+    {
+      "t": 16,
+      "submitted": 320,
+      "completed": 320
+    },
+    {
+      "t": 17,
+      "submitted": 288,
+      "completed": 288
+    },
+    {
+      "t": 18,
+      "submitted": 320,
+      "completed": 320
+    },
+    {
+      "t": 19,
+      "submitted": 288,
+      "completed": 288
+    },
+    {
+      "t": 20,
+      "submitted": 288,
+      "completed": 288
+    },
+    {
+      "t": 21,
+      "submitted": 320,
+      "completed": 320
+    },
+    {
+      "t": 22,
+      "submitted": 288,
+      "completed": 288
+    },
+    {
+      "t": 23,
+      "submitted": 288,
+      "completed": 288
+    },
+    {
+      "t": 24,
+      "submitted": 320,
+      "completed": 320
+    },
+    {
+      "t": 25,
+      "submitted": 288,
+      "completed": 288
+    },
+    {
+      "t": 26,
+      "submitted": 320,
+      "completed": 320
+    },
+    {
+      "t": 27,
+      "submitted": 160,
+      "completed": 160
+    },
+    {
+      "t": 28,
+      "submitted": 219,
+      "completed": 219
+    },
+    {
+      "t": 29,
+      "submitted": 306,
+      "completed": 306
+    },
+    {
+      "t": 30,
+      "submitted": 295,
+      "completed": 294
+    },
+    {
+      "t": 31,
+      "submitted": 293,
+      "completed": 293
+    },
+    {
+      "t": 32,
+      "submitted": 312,
+      "completed": 312
+    },
+    {
+      "t": 33,
+      "submitted": 293,
+      "completed": 294
+    },
+    {
+      "t": 34,
+      "submitted": 309,
+      "completed": 308
+    },
+    {
+      "t": 35,
+      "submitted": 296,
+      "completed": 296
+    },
+    {
+      "t": 36,
+      "submitted": 292,
+      "completed": 293
+    },
+    {
+      "t": 37,
+      "submitted": 310,
+      "completed": 310
+    },
+    {
+      "t": 38,
+      "submitted": 295,
+      "completed": 295
+    },
+    {
+      "t": 39,
+      "submitted": 293,
+      "completed": 292
+    },
+    {
+      "t": 40,
+      "submitted": 312,
+      "completed": 312
+    },
+    {
+      "t": 41,
+      "submitted": 293,
+      "completed": 293
+    },
+    {
+      "t": 42,
+      "submitted": 309,
+      "completed": 309
+    },
+    {
+      "t": 43,
+      "submitted": 296,
+      "completed": 296
+    },
+    {
+      "t": 44,
+      "submitted": 292,
+      "completed": 293
+    },
+    {
+      "t": 45,
+      "submitted": 310,
+      "completed": 310
+    },
+    {
+      "t": 46,
+      "submitted": 295,
+      "completed": 295
+    },
+    {
+      "t": 47,
+      "submitted": 293,
+      "completed": 293
+    },
+    {
+      "t": 48,
+      "submitted": 312,
+      "completed": 311
+    },
+    {
+      "t": 49,
+      "submitted": 293,
+      "completed": 294
+    },
+    {
+      "t": 50,
+      "submitted": 309,
+      "completed": 306
+    },
+    {
+      "t": 51,
+      "submitted": 296,
+      "completed": 298
+    },
+    {
+      "t": 52,
+      "submitted": 292,
+      "completed": 293
+    },
+    {
+      "t": 53,
+      "submitted": 310,
+      "completed": 310
+    },
+    {
+      "t": 54,
+      "submitted": 42,
+      "completed": 41
+    },
+    {
+      "t": 55,
+      "submitted": 36,
+      "completed": 36
+    },
+    {
+      "t": 56,
+      "submitted": 293,
+      "completed": 294
+    },
+    {
+      "t": 57,
+      "submitted": 299,
+      "completed": 298
+    },
+    {
+      "t": 58,
+      "submitted": 304,
+      "completed": 304
+    },
+    {
+      "t": 59,
+      "submitted": 298,
+      "completed": 299
+    },
+    {
+      "t": 60,
+      "submitted": 301,
+      "completed": 296
+    },
+    {
+      "t": 61,
+      "submitted": 301,
+      "completed": 305
+    },
+    {
+      "t": 62,
+      "submitted": 296,
+      "completed": 296
+    },
+    {
+      "t": 63,
+      "submitted": 304,
+      "completed": 304
+    },
+    {
+      "t": 64,
+      "submitted": 299,
+      "completed": 298
+    },
+    {
+      "t": 65,
+      "submitted": 297,
+      "completed": 297
+    },
+    {
+      "t": 66,
+      "submitted": 302,
+      "completed": 303
+    },
+    {
+      "t": 67,
+      "submitted": 300,
+      "completed": 301
+    },
+    {
+      "t": 68,
+      "submitted": 301,
+      "completed": 296
+    },
+    {
+      "t": 69,
+      "submitted": 301,
+      "completed": 304
+    },
+    {
+      "t": 70,
+      "submitted": 295,
+      "completed": 297
+    },
+    {
+      "t": 71,
+      "submitted": 306,
+      "completed": 304
+    },
+    {
+      "t": 72,
+      "submitted": 298,
+      "completed": 298
+    },
+    {
+      "t": 73,
+      "submitted": 296,
+      "completed": 298
+    },
+    {
+      "t": 74,
+      "submitted": 304,
+      "completed": 302
+    },
+    {
+      "t": 75,
+      "submitted": 299,
+      "completed": 301
+    },
+    {
+      "t": 76,
+      "submitted": 93,
+      "completed": 91
+    },
+    {
+      "t": 77,
+      "submitted": 335,
+      "completed": 336
+    },
+    {
+      "t": 78,
+      "submitted": 298,
+      "completed": 297
+    },
+    {
+      "t": 79,
+      "submitted": 303,
+      "completed": 303
+    },
+    {
+      "t": 80,
+      "submitted": 297,
+      "completed": 298
+    },
+    {
+      "t": 81,
+      "submitted": 302,
+      "completed": 302
+    },
+    {
+      "t": 82,
+      "submitted": 301,
+      "completed": 302
+    },
+    {
+      "t": 83,
+      "submitted": 299,
+      "completed": 296
+    },
+    {
+      "t": 84,
+      "submitted": 301,
+      "completed": 301
+    },
+    {
+      "t": 85,
+      "submitted": 300,
+      "completed": 302
+    },
+    {
+      "t": 86,
+      "submitted": 297,
+      "completed": 296
+    },
+    {
+      "t": 87,
+      "submitted": 304,
+      "completed": 302
+    },
+    {
+      "t": 88,
+      "submitted": 296,
+      "completed": 299
+    },
+    {
+      "t": 89,
+      "submitted": 301,
+      "completed": 300
+    },
+    {
+      "t": 90,
+      "submitted": 303,
+      "completed": 303
+    },
+    {
+      "t": 91,
+      "submitted": 298,
+      "completed": 297
+    },
+    {
+      "t": 92,
+      "submitted": 301,
+      "completed": 304
+    },
+    {
+      "t": 93,
+      "submitted": 300,
+      "completed": 299
+    },
+    {
+      "t": 94,
+      "submitted": 297,
+      "completed": 296
+    },
+    {
+      "t": 95,
+      "submitted": 304,
+      "completed": 302
+    },
+    {
+      "t": 96,
+      "submitted": 296,
+      "completed": 299
+    },
+    {
+      "t": 97,
+      "submitted": 302,
+      "completed": 299
+    },
+    {
+      "t": 98,
+      "submitted": 302,
+      "completed": 304
+    },
+    {
+      "t": 99,
+      "submitted": 298,
+      "completed": 297
+    },
+    {
+      "t": 100,
+      "submitted": 301,
+      "completed": 302
+    },
+    {
+      "t": 101,
+      "submitted": 300,
+      "completed": 301
+    },
+    {
+      "t": 102,
+      "submitted": 296,
+      "completed": 296
+    },
+    {
+      "t": 103,
+      "submitted": 302,
+      "completed": 302
+    },
+    {
+      "t": 104,
+      "submitted": 299,
+      "completed": 299
+    },
+    {
+      "t": 105,
+      "submitted": 174,
+      "completed": 174
+    },
+    {
+      "t": 106,
+      "submitted": 220,
+      "completed": 220
+    },
+    {
+      "t": 107,
+      "submitted": 296,
+      "completed": 297
+    },
+    {
+      "t": 108,
+      "submitted": 300,
+      "completed": 300
+    },
+    {
+      "t": 109,
+      "submitted": 299,
+      "completed": 297
+    },
+    {
+      "t": 110,
+      "submitted": 300,
+      "completed": 300
+    },
+    {
+      "t": 111,
+      "submitted": 300,
+      "completed": 301
+    },
+    {
+      "t": 112,
+      "submitted": 298,
+      "completed": 299
+    },
+    {
+      "t": 113,
+      "submitted": 303,
+      "completed": 301
+    },
+    {
+      "t": 114,
+      "submitted": 299,
+      "completed": 300
+    },
+    {
+      "t": 115,
+      "submitted": 301,
+      "completed": 301
+    },
+    {
+      "t": 116,
+      "submitted": 300,
+      "completed": 299
+    },
+    {
+      "t": 117,
+      "submitted": 300,
+      "completed": 301
+    },
+    {
+      "t": 118,
+      "submitted": 299,
+      "completed": 298
+    },
+    {
+      "t": 119,
+      "submitted": 300,
+      "completed": 301
+    },
+    {
+      "t": 120,
+      "submitted": 298,
+      "completed": 298
+    },
+    {
+      "t": 121,
+      "submitted": 304,
+      "completed": 301
+    },
+    {
+      "t": 122,
+      "submitted": 298,
+      "completed": 301
+    },
+    {
+      "t": 123,
+      "submitted": 301,
+      "completed": 301
+    },
+    {
+      "t": 124,
+      "submitted": 300,
+      "completed": 299
+    },
+    {
+      "t": 125,
+      "submitted": 300,
+      "completed": 299
+    },
+    {
+      "t": 126,
+      "submitted": 297,
+      "completed": 300
+    },
+    {
+      "t": 127,
+      "submitted": 302,
+      "completed": 301
+    },
+    {
+      "t": 128,
+      "submitted": 298,
+      "completed": 299
+    },
+    {
+      "t": 129,
+      "submitted": 303,
+      "completed": 299
+    },
+    {
+      "t": 130,
+      "submitted": 299,
+      "completed": 301
+    },
+    {
+      "t": 131,
+      "submitted": 91,
+      "completed": 91
+    },
+    {
+      "t": 132,
+      "submitted": 321,
+      "completed": 323
+    },
+    {
+      "t": 133,
+      "submitted": 298,
+      "completed": 297
+    },
+    {
+      "t": 134,
+      "submitted": 300,
+      "completed": 300
+    },
+    {
+      "t": 135,
+      "submitted": 300,
+      "completed": 300
+    },
+    {
+      "t": 136,
+      "submitted": 301,
+      "completed": 300
+    },
+    {
+      "t": 137,
+      "submitted": 302,
+      "completed": 301
+    },
+    {
+      "t": 138,
+      "submitted": 297,
+      "completed": 299
+    },
+    {
+      "t": 139,
+      "submitted": 301,
+      "completed": 302
+    },
+    {
+      "t": 140,
+      "submitted": 301,
+      "completed": 301
+    },
+    {
+      "t": 141,
+      "submitted": 298,
+      "completed": 298
+    },
+    {
+      "t": 142,
+      "submitted": 300,
+      "completed": 299
+    },
+    {
+      "t": 143,
+      "submitted": 299,
+      "completed": 300
+    },
+    {
+      "t": 144,
+      "submitted": 301,
+      "completed": 300
+    },
+    {
+      "t": 145,
+      "submitted": 302,
+      "completed": 302
+    },
+    {
+      "t": 146,
+      "submitted": 298,
+      "completed": 298
+    },
+    {
+      "t": 147,
+      "submitted": 301,
+      "completed": 300
+    },
+    {
+      "t": 148,
+      "submitted": 301,
+      "completed": 302
+    },
+    {
+      "t": 149,
+      "submitted": 298,
+      "completed": 299
+    },
+    {
+      "t": 150,
+      "submitted": 300,
+      "completed": 298
+    },
+    {
+      "t": 151,
+      "submitted": 300,
+      "completed": 301
+    },
+    {
+      "t": 152,
+      "submitted": 300,
+      "completed": 301
+    },
+    {
+      "t": 153,
+      "submitted": 303,
+      "completed": 301
+    },
+    {
+      "t": 154,
+      "submitted": 297,
+      "completed": 298
+    },
+    {
+      "t": 155,
+      "submitted": 301,
+      "completed": 302
+    },
+    {
+      "t": 156,
+      "submitted": 301,
+      "completed": 300
+    },
+    {
+      "t": 157,
+      "submitted": 298,
+      "completed": 298
+    },
+    {
+      "t": 158,
+      "submitted": 300,
+      "completed": 300
+    },
+    {
+      "t": 159,
+      "submitted": 299,
+      "completed": 300
+    },
+    {
+      "t": 160,
+      "submitted": 301,
+      "completed": 301
+    },
+    {
+      "t": 161,
+      "submitted": 303,
+      "completed": 301
+    },
+    {
+      "t": 162,
+      "submitted": 297,
+      "completed": 298
+    },
+    {
+      "t": 163,
+      "submitted": 301,
+      "completed": 302
+    },
+    {
+      "t": 164,
+      "submitted": 301,
+      "completed": 301
+    },
+    {
+      "t": 165,
+      "submitted": 298,
+      "completed": 298
+    },
+    {
+      "t": 166,
+      "submitted": 300,
+      "completed": 299
+    },
+    {
+      "t": 167,
+      "submitted": 300,
+      "completed": 300
+    },
+    {
+      "t": 168,
+      "submitted": 300,
+      "completed": 300
+    },
+    {
+      "t": 169,
+      "submitted": 242,
+      "completed": 241
+    },
+    {
+      "t": 170,
+      "submitted": 0,
+      "completed": 0
+    },
+    {
+      "t": 171,
+      "submitted": 174,
+      "completed": 175
+    },
+    {
+      "t": 172,
+      "submitted": 301,
+      "completed": 301
+    },
+    {
+      "t": 173,
+      "submitted": 300,
+      "completed": 298
+    },
+    {
+      "t": 174,
+      "submitted": 300,
+      "completed": 297
+    },
+    {
+      "t": 175,
+      "submitted": 302,
+      "completed": 305
+    },
+    {
+      "t": 176,
+      "submitted": 300,
+      "completed": 301
+    },
+    {
+      "t": 177,
+      "submitted": 300,
+      "completed": 301
+    },
+    {
+      "t": 178,
+      "submitted": 299,
+      "completed": 299
+    },
+    {
+      "t": 179,
+      "submitted": 299,
+      "completed": 299
+    },
+    {
+      "t": 180,
+      "submitted": 300,
+      "completed": 299
+    },
+    {
+      "t": 181,
+      "submitted": 300,
+      "completed": 299
+    },
+    {
+      "t": 182,
+      "submitted": 303,
+      "completed": 303
+    },
+    {
+      "t": 183,
+      "submitted": 299,
+      "completed": 299
+    },
+    {
+      "t": 184,
+      "submitted": 301,
+      "completed": 302
+    },
+    {
+      "t": 185,
+      "submitted": 299,
+      "completed": 301
+    },
+    {
+      "t": 186,
+      "submitted": 299,
+      "completed": 298
+    },
+    {
+      "t": 187,
+      "submitted": 299,
+      "completed": 299
+    },
+    {
+      "t": 188,
+      "submitted": 300,
+      "completed": 299
+    },
+    {
+      "t": 189,
+      "submitted": 301,
+      "completed": 300
+    },
+    {
+      "t": 190,
+      "submitted": 300,
+      "completed": 302
+    },
+    {
+      "t": 191,
+      "submitted": 300,
+      "completed": 299
+    },
+    {
+      "t": 192,
+      "submitted": 302,
+      "completed": 302
+    },
+    {
+      "t": 193,
+      "submitted": 299,
+      "completed": 300
+    },
+    {
+      "t": 194,
+      "submitted": 299,
+      "completed": 300
+    },
+    {
+      "t": 195,
+      "submitted": 299,
+      "completed": 298
+    },
+    {
+      "t": 196,
+      "submitted": 299,
+      "completed": 299
+    },
+    {
+      "t": 197,
+      "submitted": 302,
+      "completed": 300
+    },
+    {
+      "t": 198,
+      "submitted": 246,
+      "completed": 248
+    },
+    {
+      "t": 199,
+      "submitted": 26,
+      "completed": 25
+    },
+    {
+      "t": 200,
+      "submitted": 309,
+      "completed": 309
+    },
+    {
+      "t": 201,
+      "submitted": 304,
+      "completed": 305
+    },
+    {
+      "t": 202,
+      "submitted": 295,
+      "completed": 293
+    },
+    {
+      "t": 203,
+      "submitted": 303,
+      "completed": 305
+    },
+    {
+      "t": 204,
+      "submitted": 299,
+      "completed": 300
+    },
+    {
+      "t": 205,
+      "submitted": 299,
+      "completed": 298
+    },
+    {
+      "t": 206,
+      "submitted": 304,
+      "completed": 302
+    },
+    {
+      "t": 207,
+      "submitted": 295,
+      "completed": 298
+    },
+    {
+      "t": 208,
+      "submitted": 301,
+      "completed": 299
+    },
+    {
+      "t": 209,
+      "submitted": 304,
+      "completed": 305
+    },
+    {
+      "t": 210,
+      "submitted": 296,
+      "completed": 293
+    },
+    {
+      "t": 211,
+      "submitted": 302,
+      "completed": 306
+    },
+    {
+      "t": 212,
+      "submitted": 301,
+      "completed": 299
+    },
+    {
+      "t": 213,
+      "submitted": 297,
+      "completed": 299
+    },
+    {
+      "t": 214,
+      "submitted": 304,
+      "completed": 301
+    },
+    {
+      "t": 215,
+      "submitted": 295,
+      "completed": 298
+    },
+    {
+      "t": 216,
+      "submitted": 299,
+      "completed": 299
+    },
+    {
+      "t": 217,
+      "submitted": 306,
+      "completed": 305
+    },
+    {
+      "t": 218,
+      "submitted": 296,
+      "completed": 293
+    },
+    {
+      "t": 219,
+      "submitted": 302,
+      "completed": 304
+    },
+    {
+      "t": 220,
+      "submitted": 301,
+      "completed": 301
+    },
+    {
+      "t": 221,
+      "submitted": 297,
+      "completed": 299
+    },
+    {
+      "t": 222,
+      "submitted": 305,
+      "completed": 301
+    },
+    {
+      "t": 223,
+      "submitted": 294,
+      "completed": 298
+    },
+    {
+      "t": 224,
+      "submitted": 301,
+      "completed": 299
+    },
+    {
+      "t": 225,
+      "submitted": 304,
+      "completed": 305
+    },
+    {
+      "t": 226,
+      "submitted": 296,
+      "completed": 293
+    },
+    {
+      "t": 227,
+      "submitted": 302,
+      "completed": 306
+    },
+    {
+      "t": 228,
+      "submitted": 301,
+      "completed": 299
+    },
+    {
+      "t": 229,
+      "submitted": 297,
+      "completed": 298
+    },
+    {
+      "t": 230,
+      "submitted": 305,
+      "completed": 305
+    },
+    {
+      "t": 231,
+      "submitted": 294,
+      "completed": 295
+    },
+    {
+      "t": 232,
+      "submitted": 301,
+      "completed": 299
+    },
+    {
+      "t": 233,
+      "submitted": 304,
+      "completed": 305
+    },
+    {
+      "t": 234,
+      "submitted": 296,
+      "completed": 293
+    },
+    {
+      "t": 235,
+      "submitted": 302,
+      "completed": 303
+    },
+    {
+      "t": 236,
+      "submitted": 301,
+      "completed": 302
+    },
+    {
+      "t": 237,
+      "submitted": 297,
+      "completed": 299
+    },
+    {
+      "t": 238,
+      "submitted": 305,
+      "completed": 301
+    },
+    {
+      "t": 239,
+      "submitted": 294,
+      "completed": 298
+    },
+    {
+      "t": 240,
+      "submitted": 300,
+      "completed": 299
+    },
+    {
+      "t": 241,
+      "submitted": 305,
+      "completed": 305
+    },
+    {
+      "t": 242,
+      "submitted": 295,
+      "completed": 293
+    },
+    {
+      "t": 243,
+      "submitted": 303,
+      "completed": 302
+    },
+    {
+      "t": 244,
+      "submitted": 73,
+      "completed": 75
+    },
+    {
+      "t": 245,
+      "submitted": 30,
+      "completed": 30
+    },
+    {
+      "t": 246,
+      "submitted": 277,
+      "completed": 278
+    },
+    {
+      "t": 247,
+      "submitted": 296,
+      "completed": 296
+    },
+    {
+      "t": 248,
+      "submitted": 307,
+      "completed": 305
+    },
+    {
+      "t": 249,
+      "submitted": 298,
+      "completed": 299
+    },
+    {
+      "t": 250,
+      "submitted": 299,
+      "completed": 293
+    },
+    {
+      "t": 251,
+      "submitted": 300,
+      "completed": 307
+    },
+    {
+      "t": 252,
+      "submitted": 299,
+      "completed": 300
+    },
+    {
+      "t": 253,
+      "submitted": 305,
+      "completed": 305
+    },
+    {
+      "t": 254,
+      "submitted": 297,
+      "completed": 295
+    },
+    {
+      "t": 255,
+      "submitted": 295,
+      "completed": 296
+    },
+    {
+      "t": 256,
+      "submitted": 307,
+      "completed": 305
+    },
+    {
+      "t": 257,
+      "submitted": 300,
+      "completed": 299
+    },
+    {
+      "t": 258,
+      "submitted": 297,
+      "completed": 293
+    },
+    {
+      "t": 259,
+      "submitted": 300,
+      "completed": 308
+    },
+    {
+      "t": 260,
+      "submitted": 299,
+      "completed": 299
+    },
+    {
+      "t": 261,
+      "submitted": 305,
+      "completed": 305
+    },
+    {
+      "t": 262,
+      "submitted": 297,
+      "completed": 295
+    },
+    {
+      "t": 263,
+      "submitted": 295,
+      "completed": 296
+    },
+    {
+      "t": 264,
+      "submitted": 295,
+      "completed": 289
+    },
+    {
+      "t": 265,
+      "submitted": 312,
+      "completed": 315
+    },
+    {
+      "t": 266,
+      "submitted": 295,
+      "completed": 293
+    },
+    {
+      "t": 267,
+      "submitted": 302,
+      "completed": 308
+    },
+    {
+      "t": 268,
+      "submitted": 299,
+      "completed": 299
+    },
+    {
+      "t": 269,
+      "submitted": 305,
+      "completed": 305
+    },
+    {
+      "t": 270,
+      "submitted": 297,
+      "completed": 295
+    },
+    {
+      "t": 271,
+      "submitted": 295,
+      "completed": 296
+    },
+    {
+      "t": 272,
+      "submitted": 307,
+      "completed": 308
+    },
+    {
+      "t": 273,
+      "submitted": 300,
+      "completed": 296
+    },
+    {
+      "t": 274,
+      "submitted": 299,
+      "completed": 297
+    },
+    {
+      "t": 275,
+      "submitted": 298,
+      "completed": 304
+    },
+    {
+      "t": 276,
+      "submitted": 299,
+      "completed": 299
+    },
+    {
+      "t": 277,
+      "submitted": 305,
+      "completed": 305
+    },
+    {
+      "t": 278,
+      "submitted": 297,
+      "completed": 295
+    },
+    {
+      "t": 279,
+      "submitted": 295,
+      "completed": 296
+    },
+    {
+      "t": 280,
+      "submitted": 307,
+      "completed": 308
+    },
+    {
+      "t": 281,
+      "submitted": 298,
+      "completed": 296
+    },
+    {
+      "t": 282,
+      "submitted": 299,
+      "completed": 297
+    },
+    {
+      "t": 283,
+      "submitted": 300,
+      "completed": 304
+    },
+    {
+      "t": 284,
+      "submitted": 60,
+      "completed": 51
+    },
+    {
+      "t": 285,
+      "submitted": 256,
+      "completed": 263
+    },
+    {
+      "t": 286,
+      "submitted": 306,
+      "completed": 307
+    },
+    {
+      "t": 287,
+      "submitted": 293,
+      "completed": 294
+    },
+    {
+      "t": 288,
+      "submitted": 307,
+      "completed": 303
+    },
+    {
+      "t": 289,
+      "submitted": 298,
+      "completed": 301
+    },
+    {
+      "t": 290,
+      "submitted": 296,
+      "completed": 295
+    },
+    {
+      "t": 291,
+      "submitted": 306,
+      "completed": 307
+    },
+    {
+      "t": 292,
+      "submitted": 297,
+      "completed": 295
+    },
+    {
+      "t": 293,
+      "submitted": 299,
+      "completed": 301
+    },
+    {
+      "t": 294,
+      "submitted": 304,
+      "completed": 303
+    },
+    {
+      "t": 295,
+      "submitted": 293,
+      "completed": 295
+    },
+    {
+      "t": 296,
+      "submitted": 307,
+      "completed": 303
+    },
+    {
+      "t": 297,
+      "submitted": 298,
+      "completed": 301
+    },
+    {
+      "t": 298,
+      "submitted": 296,
+      "completed": 295
+    },
+    {
+      "t": 299,
+      "submitted": 307,
+      "completed": 307
+    },
+    {
+      "t": 300,
+      "submitted": 296,
+      "completed": 297
+    },
+    {
+      "t": 301,
+      "submitted": 299,
+      "completed": 299
+    },
+    {
+      "t": 302,
+      "submitted": 303,
+      "completed": 303
+    },
+    {
+      "t": 303,
+      "submitted": 294,
+      "completed": 295
+    },
+    {
+      "t": 304,
+      "submitted": 306,
+      "completed": 303
+    },
+    {
+      "t": 305,
+      "submitted": 299,
+      "completed": 301
+    },
+    {
+      "t": 306,
+      "submitted": 296,
+      "completed": 295
+    },
+    {
+      "t": 307,
+      "submitted": 307,
+      "completed": 307
+    },
+    {
+      "t": 308,
+      "submitted": 296,
+      "completed": 296
+    },
+    {
+      "t": 309,
+      "submitted": 299,
+      "completed": 300
+    },
+    {
+      "t": 310,
+      "submitted": 304,
+      "completed": 304
+    },
+    {
+      "t": 311,
+      "submitted": 293,
+      "completed": 294
+    },
+    {
+      "t": 312,
+      "submitted": 307,
+      "completed": 303
+    },
+    {
+      "t": 313,
+      "submitted": 298,
+      "completed": 301
+    },
+    {
+      "t": 314,
+      "submitted": 299,
+      "completed": 297
+    },
+    {
+      "t": 315,
+      "submitted": 303,
+      "completed": 305
+    },
+    {
+      "t": 316,
+      "submitted": 297,
+      "completed": 297
+    },
+    {
+      "t": 317,
+      "submitted": 299,
+      "completed": 299
+    },
+    {
+      "t": 318,
+      "submitted": 303,
+      "completed": 303
+    },
+    {
+      "t": 319,
+      "submitted": 294,
+      "completed": 295
+    },
+    {
+      "t": 320,
+      "submitted": 1,
+      "completed": 1
+    }
+  ]
+}

@@ -1,0 +1,358 @@
+{
+  "label": "latency nodes=3 rate=2000",
+  "addrs": "gl3420:7070,gl3421:7070,gl3422:7070",
+  "config": {
+    "Queue": "latency",
+    "Producers": 32,
+    "Workers": 64,
+    "Rate": 2000,
+    "Duration": 60000000000,
+    "PayloadSize": 256,
+    "Visibility": 30000000000,
+    "MaxRetries": 5,
+    "DrainTimeout": 120000000000,
+    "IdleSleep": 2000000,
+    "RequestTimeout": 30000000000,
+    "RunID": "dm9w5h8zn769"
+  },
+  "started_at": "2026-10-20T14:53:00.127635015-04:00",
+  "gomaxprocs": 6,
+  "num_cpu": 6,
+  "window_seconds": 60,
+  "drain_seconds": 0.017723141,
+  "submits_acknowledged": 119968,
+  "submit_errors": 0,
+  "jobs_completed": 119968,
+  "jobs_lost": 0,
+  "duplicate_completions": 0,
+  "stale_acks_rejected": 0,
+  "ack_errors": 0,
+  "claim_errors": 0,
+  "empty_claims": 930799,
+  "submit_rate_per_sec": 1999.4666666666667,
+  "ack_rate_per_sec": 1999.4666666666667,
+  "backlog_at_window_end": 0,
+  "submit_to_ack_latency_ms": {
+    "count": 119968,
+    "p50": 9.554744,
+    "p95": 10.999603,
+    "p99": 11.725944,
+    "max": 17.894494,
+    "mean": 9.537666610395958
+  },
+  "submit_latency_ms": {
+    "count": 119968,
+    "p50": 3.910636,
+    "p95": 5.02353,
+    "p99": 5.575432,
+    "max": 13.951321,
+    "mean": 3.9745552003701015
+  },
+  "per_second": [
+    {
+      "t": 0,
+      "submitted": 1984,
+      "completed": 1952
+    },
+    {
+      "t": 1,
+      "submitted": 1984,
+      "completed": 2016
+    },
+    {
+      "t": 2,
+      "submitted": 2016,
+      "completed": 1986
+    },
+    {
+      "t": 3,
+      "submitted": 1984,
+      "completed": 2014
+    },
+    {
+      "t": 4,
+      "submitted": 2016,
+      "completed": 1984
+    },
+    {
+      "t": 5,
+      "submitted": 1984,
+      "completed": 2016
+    },
+    {
+      "t": 6,
+      "submitted": 2016,
+      "completed": 1984
+    },
+    {
+      "t": 7,
+      "submitted": 1984,
+      "completed": 2016
+    },
+    {
+      "t": 8,
+      "submitted": 2016,
+      "completed": 1984
+    },
+    {
+      "t": 9,
+      "submitted": 1984,
+      "completed": 2016
+    },
+    {
+      "t": 10,
+      "submitted": 2016,
+      "completed": 1984
+    },
+    {
+      "t": 11,
+      "submitted": 1984,
+      "completed": 2016
+    },
+    {
+      "t": 12,
+      "submitted": 2016,
+      "completed": 1984
+    },
+    {
+      "t": 13,
+      "submitted": 1984,
+      "completed": 2016
+    },
+    {
+      "t": 14,
+      "submitted": 2016,
+      "completed": 1984
+    },
+    {
+      "t": 15,
+      "submitted": 1984,
+      "completed": 2016
+    },
+    {
+      "t": 16,
+      "submitted": 2016,
+      "completed": 1985
+    },
+    {
+      "t": 17,
+      "submitted": 1984,
+      "completed": 2015
+    },
+    {
+      "t": 18,
+      "submitted": 2016,
+      "completed": 1989
+    },
+    {
+      "t": 19,
+      "submitted": 1984,
+      "completed": 2011
+    },
+    {
+      "t": 20,
+      "submitted": 2016,
+      "completed": 1986
+    },
+    {
+      "t": 21,
+      "submitted": 1984,
+      "completed": 2014
+    },
+    {
+      "t": 22,
+      "submitted": 2016,
+      "completed": 1984
+    },
+    {
+      "t": 23,
+      "submitted": 1984,
+      "completed": 2016
+    },
+    {
+      "t": 24,
+      "submitted": 2016,
+      "completed": 1984
+    },
+    {
+      "t": 25,
+      "submitted": 1984,
+      "completed": 2016
+    },
+    {
+      "t": 26,
+      "submitted": 2016,
+      "completed": 1984
+    },
+    {
+      "t": 27,
+      "submitted": 1984,
+      "completed": 2016
+    },
+    {
+      "t": 28,
+      "submitted": 2016,
+      "completed": 1985
+    },
+    {
+      "t": 29,
+      "submitted": 1984,
+      "completed": 2015
+    },
+    {
+      "t": 30,
+      "submitted": 2016,
+      "completed": 1984
+    },
+    {
+      "t": 31,
+      "submitted": 1984,
+      "completed": 2016
+    },
+    {
+      "t": 32,
+      "submitted": 2016,
+      "completed": 1984
+    },
+    {
+      "t": 33,
+      "submitted": 1984,
+      "completed": 2016
+    },
+    {
+      "t": 34,
+      "submitted": 2016,
+      "completed": 1985
+    },
+    {
+      "t": 35,
+      "submitted": 1984,
+      "completed": 2015
+    },
+    {
+      "t": 36,
+      "submitted": 2016,
+      "completed": 1985
+    },
+    {
+      "t": 37,
+      "submitted": 1984,
+      "completed": 2015
+    },
+    {
+      "t": 38,
+      "submitted": 2016,
+      "completed": 1988
+    },
+    {
+      "t": 39,
+      "submitted": 1984,
+      "completed": 2012
+    },
+    {
+      "t": 40,
+      "submitted": 2016,
+      "completed": 1984
+    },
+    {
+      "t": 41,
+      "submitted": 1984,
+      "completed": 2016
+    },
+    {
+      "t": 42,
+      "submitted": 2016,
+      "completed": 1984
+    },
+    {
+      "t": 43,
+      "submitted": 1984,
+      "completed": 2016
+    },
+    {
+      "t": 44,
+      "submitted": 2016,
+      "completed": 1991
+    },
+    {
+      "t": 45,
+      "submitted": 1984,
+      "completed": 2009
+    },
+    {
+      "t": 46,
+      "submitted": 2016,
+      "completed": 1984
+    },
+    {
+      "t": 47,
+      "submitted": 1984,
+      "completed": 2016
+    },
+    {
+      "t": 48,
+      "submitted": 2016,
+      "completed": 1988
+    },
+    {
+      "t": 49,
+      "submitted": 1984,
+      "completed": 2012
+    },
+    {
+      "t": 50,
+      "submitted": 2016,
+      "completed": 1985
+    },
+    {
+      "t": 51,
+      "submitted": 1984,
+      "completed": 2015
+    },
+    {
+      "t": 52,
+      "submitted": 2016,
+      "completed": 1987
+    },
+    {
+      "t": 53,
+      "submitted": 1984,
+      "completed": 2013
+    },
+    {
+      "t": 54,
+      "submitted": 2016,
+      "completed": 1984
+    },
+    {
+      "t": 55,
+      "submitted": 1984,
+      "completed": 2016
+    },
+    {
+      "t": 56,
+      "submitted": 2016,
+      "completed": 1984
+    },
+    {
+      "t": 57,
+      "submitted": 1984,
+      "completed": 2016
+    },
+    {
+      "t": 58,
+      "submitted": 2016,
+      "completed": 1985
+    },
+    {
+      "t": 59,
+      "submitted": 1984,
+      "completed": 2015
+    },
+    {
+      "t": 60,
+      "submitted": 0,
+      "completed": 0
+    }
+  ]
+}

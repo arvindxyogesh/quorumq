@@ -13,6 +13,12 @@ quorumq claim  -queue emails -worker w1 -visibility 30s          -> job 42, leas
 quorumq ack    -job 42 -lease 9f3c...                            -> done
 ```
 
+> **Measured on the U-M Great Lakes HPC cluster** (one broker per node, 6 CPUs per
+> process, 1 GbE, node-local SSD): **0 of 3,297,343** acknowledged jobs lost,
+> including **10 leader SIGKILLs** under load; leader failover in a median
+> **1.08 s**; up to **10,766 jobs/s** end to end on 3 brokers; p99 submit-to-ack
+> latency of **11.7 ms** at 2,000 jobs/s on 3 brokers.
+>
 > **Measured** (2-vCPU sandbox, every node and the load generator on one machine):
 > **0 of 534,247** acknowledged jobs lost, including **10 forced leader kills** under
 > load; leader failover in a median **1.33 s**; under a real 2|3 network partition
@@ -342,21 +348,86 @@ three quorum commits.
 
 **How to read these numbers.**
 
-- **Throughput falls as nodes are added here because they share 2 vCPUs and one
-  disk.** Each extra replica adds another fsync and another copy of the work on
-  the same hardware. On separate machines a follower costs the leader network
-  fan-out rather than CPU, so this trend overstates the cost of replication;
-  that setup was not measured.
+- **In the sandbox, throughput falls as nodes are added because they share 2
+  vCPUs and one disk.** Each extra replica adds another fsync and another copy
+  of the work on the same hardware.
+- **With each broker on its own machine ([Great Lakes](#great-lakes-hpc-one-broker-per-node)),
+  replication still costs throughput, but far less.** At the highest load tested
+  (128 producers / 256 workers), 3 brokers completed 10,766 jobs/s and 5 brokers
+  8,847 jobs/s (18% fewer). At 32 producers / 64 workers the order is not
+  monotonic (1: 8,918; 3: 5,585; 5: 6,621 jobs/s): that load does not saturate
+  3 or 5 brokers, since 64 / 128 raised 3-broker throughput to 9,729 jobs/s at
+  a *lower* median latency. Those rows are bounded by client concurrency and
+  run-to-run variation on shared nodes (3-broker median latency ranged
+  18.1-29.3 ms across its three runs), not by capacity.
+- **Where throughput flattens (Great Lakes).** On 3 brokers, going from 64 / 128
+  to 128 / 256 added 11% throughput while median latency rose 59% (17.5 to
+  27.9 ms): the knee lies between those two points. On 5 brokers the same step
+  added 20% throughput while median latency rose 57% (22.3 to 35.0 ms). Nothing
+  beyond 128 / 256 was run, so the absolute ceiling was not measured.
+- **Below the knee, latency does not depend on rate.** On 3 Great Lakes brokers,
+  500, 1,000 and 2,000 submits/s all gave a median of 9.5-9.6 ms and p99 of
+  11.7-12.5 ms; the sandbox needed 48.2 ms median at 500/s.
 - **Failover of about 1-1.5 s** is mostly failure detection: followers wait for
   a 500 ms heartbeat timeout plus a randomised election timeout before voting,
-  then the new leader commits its first entry. Shorter timeouts would fail over
-  faster at the price of spurious elections on a busy network.
+  then the new leader commits its first entry. It barely changes with the
+  hardware: median 1,329 ms (957-1,524) in the sandbox, 1,080 ms (813-1,445) on
+  Great Lakes. Shorter timeouts would fail over faster at the price of spurious
+  elections on a busy network.
 - **Duplicates are the price of at-least-once delivery.** 55 of 92,452 jobs in
-  the chaos run were delivered twice: claims or acks whose responses were lost
-  in a failover (redelivered after the 5 s lease) and submits retried after a
-  leader crash.
+  the sandbox chaos run and 3 of 93,075 on Great Lakes were delivered twice:
+  claims or acks whose responses were lost in a failover (redelivered after the
+  5 s lease) and submits retried after a leader crash.
 
 Reproduce with `docker build -t quorumq:dev . && scripts/bench.sh`.
+
+### Great Lakes HPC: one broker per node
+
+These numbers were produced by `scripts/bench-slurm.sh`, the Slurm equivalent of
+`scripts/bench.sh` with bare processes, and rendered into
+[`bench/results/greatlakes-20261020/summary.md`](bench/results/greatlakes-20261020/summary.md).
+They are a separate data set from the sandbox results above and are not
+included in its totals.
+
+**Environment.** University of Michigan Great Lakes cluster, Slurm partition
+`standard`, 6 nodes: 5 run one `quorumq-server` each, 1 runs the load generator.
+Each node: Intel Xeon Gold 6254 @ 3.10 GHz, 2 sockets x 18 cores, 186 GiB,
+Linux 4.18 (RHEL 8). One Slurm task per node with **6 CPUs** for each broker and
+the load generator (GOMAXPROCS 6); the nodes were shared with other jobs, not
+allocated exclusively. Brokers talk over the hostnames' interface, **1 GbE
+Ethernet** (ping RTT 0.12 ms average; the nodes' InfiniBand was not used). Data
+on **node-local xfs on SSD**, every write fsynced. Go 1.27.3, static binaries,
+commit `22a1cd9`. Payloads were 256 bytes.
+
+| Measurement | Configuration | Result |
+| --- | --- | --- |
+| End-to-end throughput, 1 broker | closed loop, 32 producers / 64 workers, 3 runs x 30 s | **8,918 jobs/s** (median; range 8,638-9,010) |
+| End-to-end throughput, 3 brokers | same | **5,585 jobs/s** (5,343-5,690) |
+| End-to-end throughput, 5 brokers | same | **6,621 jobs/s** (6,542-6,684) |
+| Highest throughput, 3 brokers | closed loop, 128 producers / 256 workers, 1 run x 30 s | **10,766 jobs/s** (p99 34.6 ms) |
+| Highest throughput, 5 brokers | same | **8,847 jobs/s** (p99 47.6 ms) |
+| Submit-to-ack latency, 3 brokers | fixed 500, 1,000 and 2,000 submits/s, 60 s each | **p99 12.5, 12.0 and 11.7 ms** (p50 9.5, 9.6, 9.6 ms) |
+| Leader failover time | 10 SIGKILLs of the leader process, 15-25 s apart, under 300 submits/s | **median 1,080 ms** (813-1,445) |
+| Jobs lost across 10 leader kills | 93,075 acknowledged submits | **0** (3 duplicate deliveries) |
+| Jobs lost, all Great Lakes runs | 3,297,343 acknowledged submits | **0** |
+
+Saturation (closed loop, 30 s; the 32 / 64 rows are the throughput medians above):
+
+| Brokers | Producers / workers | Completed jobs/s | p50 (ms) | p95 (ms) | p99 (ms) |
+| --- | --- | --- | --- | --- | --- |
+| 3 | 32 / 64 | 5,585 | 21.7 | 28.9 | 32.0 |
+| 3 | 64 / 128 | 9,729 | 17.5 | 22.1 | 23.8 |
+| 3 | 128 / 256 | 10,766 | 27.9 | 32.5 | 34.6 |
+| 5 | 32 / 64 | 6,621 | 22.2 | 37.2 | 40.2 |
+| 5 | 64 / 128 | 7,358 | 22.3 | 30.3 | 35.3 |
+| 5 | 128 / 256 | 8,847 | 35.0 | 43.1 | 47.6 |
+
+No latency rate was skipped: all three are below the highest 3-broker rate
+measured. The network-partition experiment was not repeated here because it
+needs root for iptables; its results are the sandbox ones above.
+
+Reproduce on a Slurm cluster with
+`CGO_ENABLED=0 go build -o bin/ ./cmd/... && ALLOC=b sbatch -A <account> -t 01:00:00 --cpus-per-task=6 --mem=24G scripts/bench-slurm.sh`.
 
 ## Running it
 
@@ -425,6 +496,7 @@ scripts/cluster.sh up 3
 bin/quorumq-load run -addr $(scripts/cluster.sh addrs) -producers 32 -workers 64 -duration 30s
 scripts/chaos.sh 5 10 20 kills.jsonl # kill the leader 5 times, 10-20s apart, timing each failover
 sudo scripts/partition.sh out/ 30     # 5 nodes, 2|3 network partition for 30s (needs root for iptables)
+sbatch -A <account> scripts/bench-slurm.sh  # the bench.sh matrix on Slurm, one broker per node, no Docker
 ```
 
 ### Configuration

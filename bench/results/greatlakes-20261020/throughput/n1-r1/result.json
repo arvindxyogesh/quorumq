@@ -1,0 +1,208 @@
+{
+  "label": "throughput nodes=1 run=1",
+  "addrs": "gl3420:7070",
+  "config": {
+    "Queue": "tput-1",
+    "Producers": 32,
+    "Workers": 64,
+    "Rate": 0,
+    "Duration": 30000000000,
+    "PayloadSize": 256,
+    "Visibility": 30000000000,
+    "MaxRetries": 5,
+    "DrainTimeout": 120000000000,
+    "IdleSleep": 2000000,
+    "RequestTimeout": 30000000000,
+    "RunID": "dm9vyhmlwy1f"
+  },
+  "started_at": "2026-10-20T14:43:52.401949842-04:00",
+  "gomaxprocs": 6,
+  "num_cpu": 6,
+  "window_seconds": 30,
+  "drain_seconds": 0.126211051,
+  "submits_acknowledged": 259283,
+  "submit_errors": 0,
+  "jobs_completed": 259283,
+  "jobs_lost": 0,
+  "duplicate_completions": 0,
+  "stale_acks_rejected": 0,
+  "ack_errors": 0,
+  "claim_errors": 0,
+  "empty_claims": 1575,
+  "submit_rate_per_sec": 8641.7,
+  "ack_rate_per_sec": 8638.433333333332,
+  "backlog_at_window_end": 100,
+  "submit_to_ack_latency_ms": {
+    "count": 259283,
+    "p50": 15.121073,
+    "p95": 20.076949,
+    "p99": 21.981139,
+    "max": 118.87144,
+    "mean": 15.243212500349125
+  },
+  "submit_latency_ms": {
+    "count": 259283,
+    "p50": 3.672497,
+    "p95": 4.574011,
+    "p99": 5.082144,
+    "max": 13.387336,
+    "mean": 3.689767328764214
+  },
+  "per_second": [
+    {
+      "t": 0,
+      "submitted": 8227,
+      "completed": 8168
+    },
+    {
+      "t": 1,
+      "submitted": 8455,
+      "completed": 8436
+    },
+    {
+      "t": 2,
+      "submitted": 8422,
+      "completed": 8394
+    },
+    {
+      "t": 3,
+      "submitted": 8427,
+      "completed": 8430
+    },
+    {
+      "t": 4,
+      "submitted": 8430,
+      "completed": 8426
+    },
+    {
+      "t": 5,
+      "submitted": 8494,
+      "completed": 8489
+    },
+    {
+      "t": 6,
+      "submitted": 8582,
+      "completed": 8614
+    },
+    {
+      "t": 7,
+      "submitted": 8565,
+      "completed": 8571
+    },
+    {
+      "t": 8,
+      "submitted": 8612,
+      "completed": 8618
+    },
+    {
+      "t": 9,
+      "submitted": 8599,
+      "completed": 8566
+    },
+    {
+      "t": 10,
+      "submitted": 8646,
+      "completed": 8646
+    },
+    {
+      "t": 11,
+      "submitted": 8712,
+      "completed": 8710
+    },
+    {
+      "t": 12,
+      "submitted": 8597,
+      "completed": 8586
+    },
+    {
+      "t": 13,
+      "submitted": 8653,
+      "completed": 8702
+    },
+    {
+      "t": 14,
+      "submitted": 8828,
+      "completed": 8821
+    },
+    {
+      "t": 15,
+      "submitted": 8720,
+      "completed": 8704
+    },
+    {
+      "t": 16,
+      "submitted": 8766,
+      "completed": 8761
+    },
+    {
+      "t": 17,
+      "submitted": 8908,
+      "completed": 8876
+    },
+    {
+      "t": 18,
+      "submitted": 8735,
+      "completed": 8736
+    },
+    {
+      "t": 19,
+      "submitted": 8638,
+      "completed": 8632
+    },
+    {
+      "t": 20,
+      "submitted": 8579,
+      "completed": 8596
+    },
+    {
+      "t": 21,
+      "submitted": 8881,
+      "completed": 8878
+    },
+    {
+      "t": 22,
+      "submitted": 8825,
+      "completed": 8803
+    },
+    {
+      "t": 23,
+      "submitted": 8671,
+      "completed": 8675
+    },
+    {
+      "t": 24,
+      "submitted": 8579,
+      "completed": 8567
+    },
+    {
+      "t": 25,
+      "submitted": 8425,
+      "completed": 8442
+    },
+    {
+      "t": 26,
+      "submitted": 8611,
+      "completed": 8649
+    },
+    {
+      "t": 27,
+      "submitted": 8780,
+      "completed": 8797
+    },
+    {
+      "t": 28,
+      "submitted": 8915,
+      "completed": 8900
+    },
+    {
+      "t": 29,
+      "submitted": 8969,
+      "completed": 8960
+    },
+    {
+      "t": 30,
+      "submitted": 32,
+      "completed": 130
+    }
+  ]
+}

@@ -101,7 +101,7 @@ elif compgen -G "$DIR/latency/*/result.json" >/dev/null; then
   echo
   echo "| Target submits/s | Achieved jobs/s | p50 (ms) | p95 (ms) | p99 (ms) | max (ms) | Submit p50 / p99 (ms) | Jobs lost |"
   echo "| --- | --- | --- | --- | --- | --- | --- | --- |"
-  jq -rs "sort_by(.config.Rate)[] | $lat_row" "$DIR"/latency/*/result.json
+  jq -rs "$f1 sort_by(.config.Rate)[] | $(sed 's/ \* 10 | round \/ 10)/ | f1)/g' <<<"$lat_row")" "$DIR"/latency/*/result.json
   echo
 fi
 if [[ -f "$DIR/latency/skipped.txt" ]]; then
