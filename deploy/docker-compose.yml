@@ -4,6 +4,11 @@
 #   go run ./cmd/quorumq -addr localhost:7071,localhost:7072,localhost:7073 stats -queue demo
 #   curl -s localhost:8081/status
 #
+# Add Prometheus (localhost:9090) and Grafana with the quorumq dashboard
+# (localhost:3000, anonymous admin) with the observability profile:
+#
+#   docker compose -f deploy/docker-compose.yml --profile observability up -d --build
+#
 # Each node's client address in the peer list is the host-mapped port, so the
 # leader hints that followers return are usable by clients on the host (the
 # CLI, the load generator). Clients inside the Compose network would instead
@@ -44,6 +49,27 @@ services:
               "-http-addr=0.0.0.0:8080", "-data-dir=/data", "-peers", *peers]
     ports: ["7073:7070", "8083:8080"]
     volumes: ["n3-data:/data"]
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    profiles: ["observability"]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=2d"]
+    volumes: ["./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+    ports: ["9090:9090"]
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    profiles: ["observability"]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/quorumq.json
+    volumes:
+      - "./grafana/provisioning:/etc/grafana/provisioning:ro"
+      - "./grafana/dashboards:/var/lib/grafana/dashboards:ro"
+    ports: ["3000:3000"]
+    depends_on: [prometheus]
 
 volumes:
   n1-data:

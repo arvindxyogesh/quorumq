@@ -1,0 +1,9 @@
+# Scrapes the 3-node Docker Compose cluster (deploy/docker-compose.yml).
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: quorumq
+    static_configs:
+      - targets: ["n1:8080", "n2:8080", "n3:8080"]
