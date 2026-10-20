@@ -23,7 +23,7 @@ import (
 	"github.com/arvindxyogesh/quorumq/client"
 )
 
-const usage = `usage: quorumq [-addr host:port[,host:port...]] <command> [flags]
+const usage = `usage: quorumq [-addr host:port[,host:port...]] [-timeout D] [-no-retry] <command> [flags]
 
 commands:
   submit  -queue Q -payload P [-max-retries N]   enqueue a job
@@ -51,6 +51,7 @@ func run(args []string, out io.Writer) error {
 	global.Usage = func() { _, _ = fmt.Fprint(global.Output(), usage) }
 	addr := global.String("addr", envOr("QUORUMQ_ADDR", "localhost:7070"), "comma-separated broker addresses")
 	timeout := global.Duration("timeout", 10*time.Second, "per-request timeout")
+	noRetry := global.Bool("no-retry", false, "send one attempt to the first address only: no leader redirects or retries")
 	if err := global.Parse(args); err != nil {
 		return err
 	}
@@ -59,7 +60,11 @@ func run(args []string, out io.Writer) error {
 		return errors.New("missing command")
 	}
 
-	c, err := client.New(strings.Split(*addr, ","))
+	var opts []client.Option
+	if *noRetry {
+		opts = append(opts, client.WithNoRetry())
+	}
+	c, err := client.New(strings.Split(*addr, ","), opts...)
 	if err != nil {
 		return err
 	}

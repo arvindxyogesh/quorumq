@@ -59,6 +59,7 @@ type Lease struct {
 }
 
 type options struct {
+	noRetry        bool
 	dialOpts       []grpc.DialOption
 	attemptTimeout time.Duration
 	baseBackoff    time.Duration
@@ -79,6 +80,13 @@ func WithDialOptions(opts ...grpc.DialOption) Option {
 // The default is 3s.
 func WithAttemptTimeout(d time.Duration) Option {
 	return func(o *options) { o.attemptTimeout = d }
+}
+
+// WithNoRetry makes every call a single attempt against the first address:
+// no leader redirects, no failover, no retries. Use it to ask one specific
+// node, for example to check that a partitioned node refuses writes.
+func WithNoRetry() Option {
+	return func(o *options) { o.noRetry = true }
 }
 
 // WithBackoff sets the retry backoff range. The defaults are 50ms and 1s.
@@ -232,6 +240,8 @@ func (c *Client) call(ctx context.Context, fn func(context.Context, pb.QueueServ
 		switch {
 		case err == nil:
 			return nil
+		case c.opts.noRetry:
+			return err
 		case ctx.Err() != nil:
 			return expired(ctx, err, lastErr)
 		case !retryable(err):

@@ -165,6 +165,23 @@ func TestClientFollowsLeaderHint(t *testing.T) {
 	}
 }
 
+func TestNoRetryAsksOnlyTheFirstNode(t *testing.T) {
+	leaderAddr := startTCP(t, newLocalBroker(t))
+	f := &follower{leader: leaderAddr}
+	c, err := client.New([]string{startTCP(t, f), leaderAddr}, client.WithNoRetry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	_, err = c.Submit(context.Background(), "q", []byte("x"), 0)
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("got %v, want the follower's UNAVAILABLE without a redirect", err)
+	}
+	if n := f.calls.Load(); n != 1 {
+		t.Fatalf("follower received %d calls, want exactly 1", n)
+	}
+}
+
 func TestClientSkipsUnreachableNodes(t *testing.T) {
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
