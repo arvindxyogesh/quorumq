@@ -1,0 +1,30 @@
+# In-cluster load for scripts/k8s-smoke.sh. Runs inside Kubernetes so the
+# client can follow the leader hints (quorumq-N.quorumq-peers:7070), which
+# only resolve inside the cluster.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: quorumq-load
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+      containers:
+        - name: load
+          image: quorumq:dev
+          imagePullPolicy: IfNotPresent
+          command: ["/usr/local/bin/quorumq-load"]
+          args:
+            - run
+            - -addr=quorumq-0.quorumq-peers:7070,quorumq-1.quorumq-peers:7070,quorumq-2.quorumq-peers:7070
+            - -queue=k8s
+            - -producers=8
+            - -workers=16
+            - -rate=100
+            - -duration=90s
+            - -visibility=5s
+            - -drain-timeout=3m

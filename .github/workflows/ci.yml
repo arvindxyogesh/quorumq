@@ -119,3 +119,46 @@ jobs:
           docker run --rm --entrypoint promtool -v "$PWD/deploy/prometheus:/cfg:ro" prom/prometheus:v3.1.0 check config /cfg/prometheus.yml
       - name: Validate Compose file
         run: docker compose -f deploy/docker-compose.yml --profile observability config --quiet
+
+  kubernetes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t quorumq:dev .
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: quorumq
+      - name: Load image into kind
+        run: kind load docker-image quorumq:dev --name quorumq
+      - name: Deploy, run load in the cluster, force-delete the leader pod
+        run: scripts/k8s-smoke.sh
+      - name: Diagnostics
+        if: failure()
+        run: |
+          kubectl get all -o wide
+          kubectl describe pods -l app=quorumq
+          kubectl logs -l app=quorumq --tail=40 --prefix
+
+  observability:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Start the cluster with Prometheus and Grafana
+        run: docker compose -f deploy/docker-compose.yml --profile observability up -d --build
+      - name: Every dashboard query returns data through Grafana
+        run: scripts/grafana-check.sh grafana-dashboard.png
+      - name: Upload dashboard screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: grafana-dashboard
+          path: grafana-dashboard.png
+          if-no-files-found: ignore
+      - name: Diagnostics
+        if: failure()
+        run: docker compose -f deploy/docker-compose.yml --profile observability logs --tail=40

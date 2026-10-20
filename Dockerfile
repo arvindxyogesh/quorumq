@@ -5,8 +5,9 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/bin/quorumq-server ./cmd/quorumq-server \
- && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/bin/quorumq ./cmd/quorumq \
+# The server, the CLI and the load generator, so the same image can run
+# brokers and in-cluster clients (see test/k8s).
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/bin/ ./cmd/... \
  && mkdir -p /out/data
 
 # distroless/static: no shell or package manager, runs as an unprivileged user.
