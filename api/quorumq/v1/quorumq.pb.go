@@ -27,13 +27,15 @@ type JobState int32
 
 const (
 	JobState_JOB_STATE_UNSPECIFIED JobState = 0
-	// Waiting to be claimed.
+	// Waiting to be claimed, possibly delayed by a retry backoff.
 	JobState_JOB_STATE_PENDING JobState = 1
 	// Claimed by a worker; the lease may have expired but nobody has
 	// re-claimed the job yet.
 	JobState_JOB_STATE_LEASED JobState = 2
 	// Acknowledged by a worker. Terminal.
 	JobState_JOB_STATE_ACKED JobState = 3
+	// Ran out of retries and was moved to the dead-letter queue.
+	JobState_JOB_STATE_DEAD JobState = 4
 )
 
 // Enum value maps for JobState.
@@ -43,12 +45,14 @@ var (
 		1: "JOB_STATE_PENDING",
 		2: "JOB_STATE_LEASED",
 		3: "JOB_STATE_ACKED",
+		4: "JOB_STATE_DEAD",
 	}
 	JobState_value = map[string]int32{
 		"JOB_STATE_UNSPECIFIED": 0,
 		"JOB_STATE_PENDING":     1,
 		"JOB_STATE_LEASED":      2,
 		"JOB_STATE_ACKED":       3,
+		"JOB_STATE_DEAD":        4,
 	}
 )
 
@@ -92,7 +96,12 @@ type Job struct {
 	// When the job next becomes claimable. Unset once the job is acked.
 	VisibleAt *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=visible_at,json=visibleAt,proto3" json:"visible_at,omitempty"`
 	// The worker that most recently claimed the job.
-	WorkerId      string `protobuf:"bytes,9,opt,name=worker_id,json=workerId,proto3" json:"worker_id,omitempty"`
+	WorkerId string `protobuf:"bytes,9,opt,name=worker_id,json=workerId,proto3" json:"worker_id,omitempty"`
+	// Why the job last failed: the reason given in a nack, or a note that its
+	// lease expired.
+	LastError string `protobuf:"bytes,10,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`
+	// When the job was dead-lettered. Unset unless state is DEAD.
+	DeadAt        *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=dead_at,json=deadAt,proto3" json:"dead_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -188,6 +197,20 @@ func (x *Job) GetWorkerId() string {
 		return x.WorkerId
 	}
 	return ""
+}
+
+func (x *Job) GetLastError() string {
+	if x != nil {
+		return x.LastError
+	}
+	return ""
+}
+
+func (x *Job) GetDeadAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.DeadAt
+	}
+	return nil
 }
 
 type SubmitJobRequest struct {
@@ -506,9 +529,11 @@ func (*AckJobResponse) Descriptor() ([]byte, []int) {
 }
 
 type NackJobRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	JobId         string                 `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
-	LeaseId       string                 `protobuf:"bytes,2,opt,name=lease_id,json=leaseId,proto3" json:"lease_id,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	JobId   string                 `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	LeaseId string                 `protobuf:"bytes,2,opt,name=lease_id,json=leaseId,proto3" json:"lease_id,omitempty"`
+	// Optional description of the failure, kept on the job as last_error.
+	Reason        string `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -553,6 +578,13 @@ func (x *NackJobRequest) GetJobId() string {
 func (x *NackJobRequest) GetLeaseId() string {
 	if x != nil {
 		return x.LeaseId
+	}
+	return ""
+}
+
+func (x *NackJobRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
 	}
 	return ""
 }
@@ -733,7 +765,11 @@ type QueueStatsResponse struct {
 	// Jobs leased to a worker whose lease has not expired.
 	InFlight uint64 `protobuf:"varint,3,opt,name=in_flight,json=inFlight,proto3" json:"in_flight,omitempty"`
 	// Jobs acknowledged since the queue was created.
-	Acked         uint64 `protobuf:"varint,4,opt,name=acked,proto3" json:"acked,omitempty"`
+	Acked uint64 `protobuf:"varint,4,opt,name=acked,proto3" json:"acked,omitempty"`
+	// Pending jobs waiting out a retry backoff.
+	Delayed uint64 `protobuf:"varint,5,opt,name=delayed,proto3" json:"delayed,omitempty"`
+	// Jobs currently in the dead-letter queue.
+	Dead          uint64 `protobuf:"varint,6,opt,name=dead,proto3" json:"dead,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -796,12 +832,203 @@ func (x *QueueStatsResponse) GetAcked() uint64 {
 	return 0
 }
 
+func (x *QueueStatsResponse) GetDelayed() uint64 {
+	if x != nil {
+		return x.Delayed
+	}
+	return 0
+}
+
+func (x *QueueStatsResponse) GetDead() uint64 {
+	if x != nil {
+		return x.Dead
+	}
+	return 0
+}
+
+type ListDeadJobsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Queue string                 `protobuf:"bytes,1,opt,name=queue,proto3" json:"queue,omitempty"`
+	// Maximum number of jobs to return: 1-100, default 20.
+	Limit         uint32 `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDeadJobsRequest) Reset() {
+	*x = ListDeadJobsRequest{}
+	mi := &file_quorumq_v1_quorumq_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDeadJobsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDeadJobsRequest) ProtoMessage() {}
+
+func (x *ListDeadJobsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_quorumq_v1_quorumq_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDeadJobsRequest.ProtoReflect.Descriptor instead.
+func (*ListDeadJobsRequest) Descriptor() ([]byte, []int) {
+	return file_quorumq_v1_quorumq_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ListDeadJobsRequest) GetQueue() string {
+	if x != nil {
+		return x.Queue
+	}
+	return ""
+}
+
+func (x *ListDeadJobsRequest) GetLimit() uint32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type ListDeadJobsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Jobs          []*Job                 `protobuf:"bytes,1,rep,name=jobs,proto3" json:"jobs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDeadJobsResponse) Reset() {
+	*x = ListDeadJobsResponse{}
+	mi := &file_quorumq_v1_quorumq_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDeadJobsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDeadJobsResponse) ProtoMessage() {}
+
+func (x *ListDeadJobsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_quorumq_v1_quorumq_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDeadJobsResponse.ProtoReflect.Descriptor instead.
+func (*ListDeadJobsResponse) Descriptor() ([]byte, []int) {
+	return file_quorumq_v1_quorumq_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ListDeadJobsResponse) GetJobs() []*Job {
+	if x != nil {
+		return x.Jobs
+	}
+	return nil
+}
+
+type RedriveJobRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	JobId         string                 `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RedriveJobRequest) Reset() {
+	*x = RedriveJobRequest{}
+	mi := &file_quorumq_v1_quorumq_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RedriveJobRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RedriveJobRequest) ProtoMessage() {}
+
+func (x *RedriveJobRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_quorumq_v1_quorumq_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RedriveJobRequest.ProtoReflect.Descriptor instead.
+func (*RedriveJobRequest) Descriptor() ([]byte, []int) {
+	return file_quorumq_v1_quorumq_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *RedriveJobRequest) GetJobId() string {
+	if x != nil {
+		return x.JobId
+	}
+	return ""
+}
+
+type RedriveJobResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RedriveJobResponse) Reset() {
+	*x = RedriveJobResponse{}
+	mi := &file_quorumq_v1_quorumq_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RedriveJobResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RedriveJobResponse) ProtoMessage() {}
+
+func (x *RedriveJobResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_quorumq_v1_quorumq_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RedriveJobResponse.ProtoReflect.Descriptor instead.
+func (*RedriveJobResponse) Descriptor() ([]byte, []int) {
+	return file_quorumq_v1_quorumq_proto_rawDescGZIP(), []int{16}
+}
+
 var File_quorumq_v1_quorumq_proto protoreflect.FileDescriptor
 
 const file_quorumq_v1_quorumq_proto_rawDesc = "" +
 	"\n" +
 	"\x18quorumq/v1/quorumq.proto\x12\n" +
-	"quorumq.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc1\x02\n" +
+	"quorumq.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x95\x03\n" +
 	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05queue\x18\x02 \x01(\tR\x05queue\x12\x18\n" +
@@ -814,7 +1041,11 @@ const file_quorumq_v1_quorumq_proto_rawDesc = "" +
 	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
 	"visible_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tvisibleAt\x12\x1b\n" +
-	"\tworker_id\x18\t \x01(\tR\bworkerId\"c\n" +
+	"\tworker_id\x18\t \x01(\tR\bworkerId\x12\x1d\n" +
+	"\n" +
+	"last_error\x18\n" +
+	" \x01(\tR\tlastError\x123\n" +
+	"\adead_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\x06deadAt\"c\n" +
 	"\x10SubmitJobRequest\x12\x14\n" +
 	"\x05queue\x18\x01 \x01(\tR\x05queue\x12\x18\n" +
 	"\apayload\x18\x02 \x01(\fR\apayload\x12\x1f\n" +
@@ -833,27 +1064,39 @@ const file_quorumq_v1_quorumq_proto_rawDesc = "" +
 	"\rAckJobRequest\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x19\n" +
 	"\blease_id\x18\x02 \x01(\tR\aleaseId\"\x10\n" +
-	"\x0eAckJobResponse\"B\n" +
+	"\x0eAckJobResponse\"Z\n" +
 	"\x0eNackJobRequest\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x19\n" +
-	"\blease_id\x18\x02 \x01(\tR\aleaseId\"\x11\n" +
+	"\blease_id\x18\x02 \x01(\tR\aleaseId\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"\x11\n" +
 	"\x0fNackJobResponse\"&\n" +
 	"\rGetJobRequest\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\"3\n" +
 	"\x0eGetJobResponse\x12!\n" +
 	"\x03job\x18\x01 \x01(\v2\x0f.quorumq.v1.JobR\x03job\")\n" +
 	"\x11QueueStatsRequest\x12\x14\n" +
-	"\x05queue\x18\x01 \x01(\tR\x05queue\"w\n" +
+	"\x05queue\x18\x01 \x01(\tR\x05queue\"\xa5\x01\n" +
 	"\x12QueueStatsResponse\x12\x14\n" +
 	"\x05queue\x18\x01 \x01(\tR\x05queue\x12\x18\n" +
 	"\avisible\x18\x02 \x01(\x04R\avisible\x12\x1b\n" +
 	"\tin_flight\x18\x03 \x01(\x04R\binFlight\x12\x14\n" +
-	"\x05acked\x18\x04 \x01(\x04R\x05acked*g\n" +
+	"\x05acked\x18\x04 \x01(\x04R\x05acked\x12\x18\n" +
+	"\adelayed\x18\x05 \x01(\x04R\adelayed\x12\x12\n" +
+	"\x04dead\x18\x06 \x01(\x04R\x04dead\"A\n" +
+	"\x13ListDeadJobsRequest\x12\x14\n" +
+	"\x05queue\x18\x01 \x01(\tR\x05queue\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\rR\x05limit\";\n" +
+	"\x14ListDeadJobsResponse\x12#\n" +
+	"\x04jobs\x18\x01 \x03(\v2\x0f.quorumq.v1.JobR\x04jobs\"*\n" +
+	"\x11RedriveJobRequest\x12\x15\n" +
+	"\x06job_id\x18\x01 \x01(\tR\x05jobId\"\x14\n" +
+	"\x12RedriveJobResponse*{\n" +
 	"\bJobState\x12\x19\n" +
 	"\x15JOB_STATE_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11JOB_STATE_PENDING\x10\x01\x12\x14\n" +
 	"\x10JOB_STATE_LEASED\x10\x02\x12\x13\n" +
-	"\x0fJOB_STATE_ACKED\x10\x032\xb2\x03\n" +
+	"\x0fJOB_STATE_ACKED\x10\x03\x12\x12\n" +
+	"\x0eJOB_STATE_DEAD\x10\x042\xd2\x04\n" +
 	"\fQueueService\x12H\n" +
 	"\tSubmitJob\x12\x1c.quorumq.v1.SubmitJobRequest\x1a\x1d.quorumq.v1.SubmitJobResponse\x12E\n" +
 	"\bClaimJob\x12\x1b.quorumq.v1.ClaimJobRequest\x1a\x1c.quorumq.v1.ClaimJobResponse\x12?\n" +
@@ -861,7 +1104,10 @@ const file_quorumq_v1_quorumq_proto_rawDesc = "" +
 	"\aNackJob\x12\x1a.quorumq.v1.NackJobRequest\x1a\x1b.quorumq.v1.NackJobResponse\x12?\n" +
 	"\x06GetJob\x12\x19.quorumq.v1.GetJobRequest\x1a\x1a.quorumq.v1.GetJobResponse\x12K\n" +
 	"\n" +
-	"QueueStats\x12\x1d.quorumq.v1.QueueStatsRequest\x1a\x1e.quorumq.v1.QueueStatsResponseB;Z9github.com/arvindxyogesh/quorumq/api/quorumq/v1;quorumqv1b\x06proto3"
+	"QueueStats\x12\x1d.quorumq.v1.QueueStatsRequest\x1a\x1e.quorumq.v1.QueueStatsResponse\x12Q\n" +
+	"\fListDeadJobs\x12\x1f.quorumq.v1.ListDeadJobsRequest\x1a .quorumq.v1.ListDeadJobsResponse\x12K\n" +
+	"\n" +
+	"RedriveJob\x12\x1d.quorumq.v1.RedriveJobRequest\x1a\x1e.quorumq.v1.RedriveJobResponseB;Z9github.com/arvindxyogesh/quorumq/api/quorumq/v1;quorumqv1b\x06proto3"
 
 var (
 	file_quorumq_v1_quorumq_proto_rawDescOnce sync.Once
@@ -876,7 +1122,7 @@ func file_quorumq_v1_quorumq_proto_rawDescGZIP() []byte {
 }
 
 var file_quorumq_v1_quorumq_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_quorumq_v1_quorumq_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_quorumq_v1_quorumq_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_quorumq_v1_quorumq_proto_goTypes = []any{
 	(JobState)(0),                 // 0: quorumq.v1.JobState
 	(*Job)(nil),                   // 1: quorumq.v1.Job
@@ -892,34 +1138,44 @@ var file_quorumq_v1_quorumq_proto_goTypes = []any{
 	(*GetJobResponse)(nil),        // 11: quorumq.v1.GetJobResponse
 	(*QueueStatsRequest)(nil),     // 12: quorumq.v1.QueueStatsRequest
 	(*QueueStatsResponse)(nil),    // 13: quorumq.v1.QueueStatsResponse
-	(*timestamppb.Timestamp)(nil), // 14: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),   // 15: google.protobuf.Duration
+	(*ListDeadJobsRequest)(nil),   // 14: quorumq.v1.ListDeadJobsRequest
+	(*ListDeadJobsResponse)(nil),  // 15: quorumq.v1.ListDeadJobsResponse
+	(*RedriveJobRequest)(nil),     // 16: quorumq.v1.RedriveJobRequest
+	(*RedriveJobResponse)(nil),    // 17: quorumq.v1.RedriveJobResponse
+	(*timestamppb.Timestamp)(nil), // 18: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),   // 19: google.protobuf.Duration
 }
 var file_quorumq_v1_quorumq_proto_depIdxs = []int32{
 	0,  // 0: quorumq.v1.Job.state:type_name -> quorumq.v1.JobState
-	14, // 1: quorumq.v1.Job.created_at:type_name -> google.protobuf.Timestamp
-	14, // 2: quorumq.v1.Job.visible_at:type_name -> google.protobuf.Timestamp
-	15, // 3: quorumq.v1.ClaimJobRequest.visibility_timeout:type_name -> google.protobuf.Duration
-	1,  // 4: quorumq.v1.ClaimJobResponse.job:type_name -> quorumq.v1.Job
-	14, // 5: quorumq.v1.ClaimJobResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
-	1,  // 6: quorumq.v1.GetJobResponse.job:type_name -> quorumq.v1.Job
-	2,  // 7: quorumq.v1.QueueService.SubmitJob:input_type -> quorumq.v1.SubmitJobRequest
-	4,  // 8: quorumq.v1.QueueService.ClaimJob:input_type -> quorumq.v1.ClaimJobRequest
-	6,  // 9: quorumq.v1.QueueService.AckJob:input_type -> quorumq.v1.AckJobRequest
-	8,  // 10: quorumq.v1.QueueService.NackJob:input_type -> quorumq.v1.NackJobRequest
-	10, // 11: quorumq.v1.QueueService.GetJob:input_type -> quorumq.v1.GetJobRequest
-	12, // 12: quorumq.v1.QueueService.QueueStats:input_type -> quorumq.v1.QueueStatsRequest
-	3,  // 13: quorumq.v1.QueueService.SubmitJob:output_type -> quorumq.v1.SubmitJobResponse
-	5,  // 14: quorumq.v1.QueueService.ClaimJob:output_type -> quorumq.v1.ClaimJobResponse
-	7,  // 15: quorumq.v1.QueueService.AckJob:output_type -> quorumq.v1.AckJobResponse
-	9,  // 16: quorumq.v1.QueueService.NackJob:output_type -> quorumq.v1.NackJobResponse
-	11, // 17: quorumq.v1.QueueService.GetJob:output_type -> quorumq.v1.GetJobResponse
-	13, // 18: quorumq.v1.QueueService.QueueStats:output_type -> quorumq.v1.QueueStatsResponse
-	13, // [13:19] is the sub-list for method output_type
-	7,  // [7:13] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	18, // 1: quorumq.v1.Job.created_at:type_name -> google.protobuf.Timestamp
+	18, // 2: quorumq.v1.Job.visible_at:type_name -> google.protobuf.Timestamp
+	18, // 3: quorumq.v1.Job.dead_at:type_name -> google.protobuf.Timestamp
+	19, // 4: quorumq.v1.ClaimJobRequest.visibility_timeout:type_name -> google.protobuf.Duration
+	1,  // 5: quorumq.v1.ClaimJobResponse.job:type_name -> quorumq.v1.Job
+	18, // 6: quorumq.v1.ClaimJobResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
+	1,  // 7: quorumq.v1.GetJobResponse.job:type_name -> quorumq.v1.Job
+	1,  // 8: quorumq.v1.ListDeadJobsResponse.jobs:type_name -> quorumq.v1.Job
+	2,  // 9: quorumq.v1.QueueService.SubmitJob:input_type -> quorumq.v1.SubmitJobRequest
+	4,  // 10: quorumq.v1.QueueService.ClaimJob:input_type -> quorumq.v1.ClaimJobRequest
+	6,  // 11: quorumq.v1.QueueService.AckJob:input_type -> quorumq.v1.AckJobRequest
+	8,  // 12: quorumq.v1.QueueService.NackJob:input_type -> quorumq.v1.NackJobRequest
+	10, // 13: quorumq.v1.QueueService.GetJob:input_type -> quorumq.v1.GetJobRequest
+	12, // 14: quorumq.v1.QueueService.QueueStats:input_type -> quorumq.v1.QueueStatsRequest
+	14, // 15: quorumq.v1.QueueService.ListDeadJobs:input_type -> quorumq.v1.ListDeadJobsRequest
+	16, // 16: quorumq.v1.QueueService.RedriveJob:input_type -> quorumq.v1.RedriveJobRequest
+	3,  // 17: quorumq.v1.QueueService.SubmitJob:output_type -> quorumq.v1.SubmitJobResponse
+	5,  // 18: quorumq.v1.QueueService.ClaimJob:output_type -> quorumq.v1.ClaimJobResponse
+	7,  // 19: quorumq.v1.QueueService.AckJob:output_type -> quorumq.v1.AckJobResponse
+	9,  // 20: quorumq.v1.QueueService.NackJob:output_type -> quorumq.v1.NackJobResponse
+	11, // 21: quorumq.v1.QueueService.GetJob:output_type -> quorumq.v1.GetJobResponse
+	13, // 22: quorumq.v1.QueueService.QueueStats:output_type -> quorumq.v1.QueueStatsResponse
+	15, // 23: quorumq.v1.QueueService.ListDeadJobs:output_type -> quorumq.v1.ListDeadJobsResponse
+	17, // 24: quorumq.v1.QueueService.RedriveJob:output_type -> quorumq.v1.RedriveJobResponse
+	17, // [17:25] is the sub-list for method output_type
+	9,  // [9:17] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_quorumq_v1_quorumq_proto_init() }
@@ -933,7 +1189,7 @@ func file_quorumq_v1_quorumq_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_quorumq_v1_quorumq_proto_rawDesc), len(file_quorumq_v1_quorumq_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   13,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -11,7 +11,9 @@ option go_package = "github.com/arvindxyogesh/quorumq/api/quorumq/v1;quorumqv1";
 //
 // Delivery is at-least-once: a claimed job is hidden from other workers for
 // its visibility timeout and becomes claimable again if it is not acked
-// before the lease expires.
+// before the lease expires. A nacked job is retried after an exponential
+// backoff; a job delivered more than max_retries + 1 times without an ack is
+// moved to the queue's dead-letter queue.
 service QueueService {
   // SubmitJob durably enqueues a job and returns its ID.
   rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
@@ -27,17 +29,24 @@ service QueueService {
   rpc GetJob(GetJobRequest) returns (GetJobResponse);
   // QueueStats returns counts for a queue.
   rpc QueueStats(QueueStatsRequest) returns (QueueStatsResponse);
+  // ListDeadJobs returns a queue's dead-lettered jobs, oldest first.
+  rpc ListDeadJobs(ListDeadJobsRequest) returns (ListDeadJobsResponse);
+  // RedriveJob moves a dead-lettered job back to its queue with a fresh
+  // retry budget.
+  rpc RedriveJob(RedriveJobRequest) returns (RedriveJobResponse);
 }
 
 enum JobState {
   JOB_STATE_UNSPECIFIED = 0;
-  // Waiting to be claimed.
+  // Waiting to be claimed, possibly delayed by a retry backoff.
   JOB_STATE_PENDING = 1;
   // Claimed by a worker; the lease may have expired but nobody has
   // re-claimed the job yet.
   JOB_STATE_LEASED = 2;
   // Acknowledged by a worker. Terminal.
   JOB_STATE_ACKED = 3;
+  // Ran out of retries and was moved to the dead-letter queue.
+  JOB_STATE_DEAD = 4;
 }
 
 message Job {
@@ -53,6 +62,11 @@ message Job {
   google.protobuf.Timestamp visible_at = 8;
   // The worker that most recently claimed the job.
   string worker_id = 9;
+  // Why the job last failed: the reason given in a nack, or a note that its
+  // lease expired.
+  string last_error = 10;
+  // When the job was dead-lettered. Unset unless state is DEAD.
+  google.protobuf.Timestamp dead_at = 11;
 }
 
 message SubmitJobRequest {
@@ -90,6 +104,8 @@ message AckJobResponse {}
 message NackJobRequest {
   string job_id = 1;
   string lease_id = 2;
+  // Optional description of the failure, kept on the job as last_error.
+  string reason = 3;
 }
 
 message NackJobResponse {}
@@ -114,4 +130,24 @@ message QueueStatsResponse {
   uint64 in_flight = 3;
   // Jobs acknowledged since the queue was created.
   uint64 acked = 4;
+  // Pending jobs waiting out a retry backoff.
+  uint64 delayed = 5;
+  // Jobs currently in the dead-letter queue.
+  uint64 dead = 6;
 }
+
+message ListDeadJobsRequest {
+  string queue = 1;
+  // Maximum number of jobs to return: 1-100, default 20.
+  uint32 limit = 2;
+}
+
+message ListDeadJobsResponse {
+  repeated Job jobs = 1;
+}
+
+message RedriveJobRequest {
+  string job_id = 1;
+}
+
+message RedriveJobResponse {}

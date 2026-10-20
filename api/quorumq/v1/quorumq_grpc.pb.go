@@ -19,12 +19,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	QueueService_SubmitJob_FullMethodName  = "/quorumq.v1.QueueService/SubmitJob"
-	QueueService_ClaimJob_FullMethodName   = "/quorumq.v1.QueueService/ClaimJob"
-	QueueService_AckJob_FullMethodName     = "/quorumq.v1.QueueService/AckJob"
-	QueueService_NackJob_FullMethodName    = "/quorumq.v1.QueueService/NackJob"
-	QueueService_GetJob_FullMethodName     = "/quorumq.v1.QueueService/GetJob"
-	QueueService_QueueStats_FullMethodName = "/quorumq.v1.QueueService/QueueStats"
+	QueueService_SubmitJob_FullMethodName    = "/quorumq.v1.QueueService/SubmitJob"
+	QueueService_ClaimJob_FullMethodName     = "/quorumq.v1.QueueService/ClaimJob"
+	QueueService_AckJob_FullMethodName       = "/quorumq.v1.QueueService/AckJob"
+	QueueService_NackJob_FullMethodName      = "/quorumq.v1.QueueService/NackJob"
+	QueueService_GetJob_FullMethodName       = "/quorumq.v1.QueueService/GetJob"
+	QueueService_QueueStats_FullMethodName   = "/quorumq.v1.QueueService/QueueStats"
+	QueueService_ListDeadJobs_FullMethodName = "/quorumq.v1.QueueService/ListDeadJobs"
+	QueueService_RedriveJob_FullMethodName   = "/quorumq.v1.QueueService/RedriveJob"
 )
 
 // QueueServiceClient is the client API for QueueService service.
@@ -35,7 +37,9 @@ const (
 //
 // Delivery is at-least-once: a claimed job is hidden from other workers for
 // its visibility timeout and becomes claimable again if it is not acked
-// before the lease expires.
+// before the lease expires. A nacked job is retried after an exponential
+// backoff; a job delivered more than max_retries + 1 times without an ack is
+// moved to the queue's dead-letter queue.
 type QueueServiceClient interface {
 	// SubmitJob durably enqueues a job and returns its ID.
 	SubmitJob(ctx context.Context, in *SubmitJobRequest, opts ...grpc.CallOption) (*SubmitJobResponse, error)
@@ -51,6 +55,11 @@ type QueueServiceClient interface {
 	GetJob(ctx context.Context, in *GetJobRequest, opts ...grpc.CallOption) (*GetJobResponse, error)
 	// QueueStats returns counts for a queue.
 	QueueStats(ctx context.Context, in *QueueStatsRequest, opts ...grpc.CallOption) (*QueueStatsResponse, error)
+	// ListDeadJobs returns a queue's dead-lettered jobs, oldest first.
+	ListDeadJobs(ctx context.Context, in *ListDeadJobsRequest, opts ...grpc.CallOption) (*ListDeadJobsResponse, error)
+	// RedriveJob moves a dead-lettered job back to its queue with a fresh
+	// retry budget.
+	RedriveJob(ctx context.Context, in *RedriveJobRequest, opts ...grpc.CallOption) (*RedriveJobResponse, error)
 }
 
 type queueServiceClient struct {
@@ -121,6 +130,26 @@ func (c *queueServiceClient) QueueStats(ctx context.Context, in *QueueStatsReque
 	return out, nil
 }
 
+func (c *queueServiceClient) ListDeadJobs(ctx context.Context, in *ListDeadJobsRequest, opts ...grpc.CallOption) (*ListDeadJobsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListDeadJobsResponse)
+	err := c.cc.Invoke(ctx, QueueService_ListDeadJobs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queueServiceClient) RedriveJob(ctx context.Context, in *RedriveJobRequest, opts ...grpc.CallOption) (*RedriveJobResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RedriveJobResponse)
+	err := c.cc.Invoke(ctx, QueueService_RedriveJob_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // QueueServiceServer is the server API for QueueService service.
 // All implementations must embed UnimplementedQueueServiceServer
 // for forward compatibility.
@@ -129,7 +158,9 @@ func (c *queueServiceClient) QueueStats(ctx context.Context, in *QueueStatsReque
 //
 // Delivery is at-least-once: a claimed job is hidden from other workers for
 // its visibility timeout and becomes claimable again if it is not acked
-// before the lease expires.
+// before the lease expires. A nacked job is retried after an exponential
+// backoff; a job delivered more than max_retries + 1 times without an ack is
+// moved to the queue's dead-letter queue.
 type QueueServiceServer interface {
 	// SubmitJob durably enqueues a job and returns its ID.
 	SubmitJob(context.Context, *SubmitJobRequest) (*SubmitJobResponse, error)
@@ -145,6 +176,11 @@ type QueueServiceServer interface {
 	GetJob(context.Context, *GetJobRequest) (*GetJobResponse, error)
 	// QueueStats returns counts for a queue.
 	QueueStats(context.Context, *QueueStatsRequest) (*QueueStatsResponse, error)
+	// ListDeadJobs returns a queue's dead-lettered jobs, oldest first.
+	ListDeadJobs(context.Context, *ListDeadJobsRequest) (*ListDeadJobsResponse, error)
+	// RedriveJob moves a dead-lettered job back to its queue with a fresh
+	// retry budget.
+	RedriveJob(context.Context, *RedriveJobRequest) (*RedriveJobResponse, error)
 	mustEmbedUnimplementedQueueServiceServer()
 }
 
@@ -172,6 +208,12 @@ func (UnimplementedQueueServiceServer) GetJob(context.Context, *GetJobRequest) (
 }
 func (UnimplementedQueueServiceServer) QueueStats(context.Context, *QueueStatsRequest) (*QueueStatsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QueueStats not implemented")
+}
+func (UnimplementedQueueServiceServer) ListDeadJobs(context.Context, *ListDeadJobsRequest) (*ListDeadJobsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListDeadJobs not implemented")
+}
+func (UnimplementedQueueServiceServer) RedriveJob(context.Context, *RedriveJobRequest) (*RedriveJobResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RedriveJob not implemented")
 }
 func (UnimplementedQueueServiceServer) mustEmbedUnimplementedQueueServiceServer() {}
 func (UnimplementedQueueServiceServer) testEmbeddedByValue()                      {}
@@ -302,6 +344,42 @@ func _QueueService_QueueStats_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _QueueService_ListDeadJobs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDeadJobsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueueServiceServer).ListDeadJobs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: QueueService_ListDeadJobs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueueServiceServer).ListDeadJobs(ctx, req.(*ListDeadJobsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _QueueService_RedriveJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RedriveJobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueueServiceServer).RedriveJob(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: QueueService_RedriveJob_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueueServiceServer).RedriveJob(ctx, req.(*RedriveJobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // QueueService_ServiceDesc is the grpc.ServiceDesc for QueueService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -332,6 +410,14 @@ var QueueService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "QueueStats",
 			Handler:    _QueueService_QueueStats_Handler,
+		},
+		{
+			MethodName: "ListDeadJobs",
+			Handler:    _QueueService_ListDeadJobs_Handler,
+		},
+		{
+			MethodName: "RedriveJob",
+			Handler:    _QueueService_RedriveJob_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
