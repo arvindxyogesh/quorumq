@@ -34,7 +34,20 @@ for n in $(seq 1 5); do
   bin/quorumq -addr "$ADDRS" nack -job "$ID" -lease "$(jq -r .lease_id <<<"$C")" -reason "invalid input" >/dev/null
 done
 wait "$LOAD"
-sleep 15 # at least two scrapes after the load, so rate() has data
+
+# Some non-OK responses for the errors panel: requests sent straight to each
+# node (followers answer UNAVAILABLE with a leader hint) and an ack with a
+# superseded lease (FAILED_PRECONDITION).
+for _ in 1 2 3; do
+  for i in 1 2 3; do bin/quorumq -addr "localhost:707$i" -no-retry stats -queue dashboard >/dev/null 2>&1 || true; done
+done
+ID=$(bin/quorumq -addr "$ADDRS" submit -queue stale -payload x -max-retries 3 | jq -r .job_id)
+OLD=$(bin/quorumq -addr "$ADDRS" claim -queue stale -worker slow -visibility 1s | jq -r .lease_id)
+sleep 1.5
+NEW=$(bin/quorumq -addr "$ADDRS" claim -queue stale -worker fast | jq -r .lease_id)
+if bin/quorumq -addr "$ADDRS" ack -job "$ID" -lease "$OLD" >/dev/null 2>&1; then err "stale ack was accepted"; exit 1; fi
+bin/quorumq -addr "$ADDRS" ack -job "$ID" -lease "$NEW" >/dev/null
+sleep 15 # at least two scrapes after the traffic, so rate() has data
 
 echo "==> Prometheus targets"
 curl -sf "$PROM/api/v1/targets" | jq -r '.data.activeTargets[] | "\(.labels.instance) \(.health)"'
