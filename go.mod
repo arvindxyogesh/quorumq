@@ -1,6 +1,6 @@
 module github.com/arvindxyogesh/quorumq
 
-go 1.24
+go 1.27.3
 
 require (
 	github.com/hashicorp/go-hclog v1.6.2

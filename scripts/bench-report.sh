@@ -9,6 +9,7 @@ ENV="$DIR/env.json"
 med='def median: sort | if length == 0 then null elif length % 2 == 1 then .[length/2|floor] else (.[length/2-1] + .[length/2]) / 2 end;'
 r0() { awk '{printf "%.0f", $1}'; }
 r1() { awk '{printf "%.1f", $1}'; }
+f1='def f1: (. * 10 | round / 10) | tostring | if test("[.]") then . else . + ".0" end;'
 
 echo "# Benchmark results: $(jq -r .run "$ENV")"
 echo
@@ -21,11 +22,23 @@ if [[ -f "$DIR/reconcile.txt" ]]; then
 fi
 echo "## Environment"
 echo
+if jq -e .slurm "$ENV" >/dev/null; then
+  jq -r '"- Commit: `\(.commit)`",
+         "- Slurm partition `\(.slurm.partition)`, \(.slurm.nodes) nodes: \(.slurm.nodes - 1) broker nodes (one broker each) and 1 load-generator node",
+         "- Allocation option \(.slurm.allocation): \(if .slurm.exclusive == "yes" then "--exclusive whole nodes" else "one task per node, shared nodes" end); every broker and the load generator could use \(.slurm.cpus_per_step) CPUs",
+         "- Node: \(.slurm.node.cpu_models); \(.slurm.node.sockets) sockets x \(.slurm.node.cores_per_socket) cores x \(.slurm.node.threads_per_core) threads (\(.slurm.node.cpus) CPUs); memory \(.slurm.node.memory); kernel \(.kernel)",
+         "- Network: hostnames resolve to \(.slurm.network.interface) (\(.slurm.network.type), \(.slurm.network.speed_mbps) Mb/s); ping RTT min/avg/max/mdev broker-broker \(.slurm.network.ping_rtt_broker_to_broker_ms), load-broker \(.slurm.network.ping_rtt_load_to_broker_ms)",
+         "- Data directories: node-local \(.slurm.data_dir.filesystem) filesystem; disk \(.slurm.data_dir.disk)",
+         "- \(.go); \(.image)",
+         "- Setup: \(.setup)",
+         (if .params.payload_bytes then "- Payload \(.params.payload_bytes) bytes; closed-loop runs use \(.params.producers) producers and \(.params.workers) workers" else empty end)' "$ENV"
+else
 jq -r '"- Commit: `\(.commit)`",
        "- CPU: \(.cpu), \(.cpus) vCPUs; memory \(.memory); kernel \(.kernel)",
        "- Docker \(.docker), \(.go); image \(.image)",
        "- Setup: \(.setup)",
        (if .params.payload_bytes then "- Payload \(.params.payload_bytes) bytes; closed-loop runs use \(.params.producers) producers and \(.params.workers) workers" else empty end)' "$ENV"
+fi
 echo
 echo "Submit-to-ack latency runs from the start of a Submit call to the end of the"
 echo "worker's successful Ack for that job: submit commit, time queued, claim commit,"
@@ -54,12 +67,47 @@ done
 echo
 fi
 
+if compgen -G "$DIR/saturation/*/result.json" >/dev/null; then
+echo "## Saturation: more producers and workers"
+echo
+echo "Closed loop for $(jq -r .params.duration "$ENV"), 1 run per row; the $(jq -r .params.producers "$ENV")/$(jq -r .params.workers "$ENV") rows are the medians from the throughput table."
+echo
+echo "| Nodes | Producers / workers | Completed jobs/s | Submit-to-ack p50 (ms) | p95 (ms) | p99 (ms) | Jobs lost |"
+echo "| --- | --- | --- | --- | --- | --- | --- |"
+for n in 1 2 3 4 5; do
+  files=("$DIR"/throughput/n$n-r*/result.json)
+  sat=("$DIR"/saturation/n$n-*/result.json)
+  [[ -e "${sat[0]:-}" ]] || continue
+  if [[ -e "${files[0]:-}" ]]; then
+    jq -rs "$med $f1"' "| '"$n"' | \(.[0].config.Producers) / \(.[0].config.Workers) | \([.[].ack_rate_per_sec] | median | round) | \([.[].submit_to_ack_latency_ms.p50] | median | f1) | \([.[].submit_to_ack_latency_ms.p95] | median | f1) | \([.[].submit_to_ack_latency_ms.p99] | median | f1) | \([.[].jobs_lost] | add) of \([.[].submits_acknowledged] | add) |"' "${files[@]}"
+  fi
+  jq -rs "$f1"' sort_by(.config.Producers)[] | "| '"$n"' | \(.config.Producers) / \(.config.Workers) | \(.ack_rate_per_sec | round) | \(.submit_to_ack_latency_ms.p50 | f1) | \(.submit_to_ack_latency_ms.p95 | f1) | \(.submit_to_ack_latency_ms.p99 | f1) | \(.jobs_lost) of \(.submits_acknowledged) |"' "${sat[@]}"
+done
+echo
+fi
+
+lat_row='"| \(.config.Rate) | \(.ack_rate_per_sec | floor) | \(.submit_to_ack_latency_ms.p50 * 10 | round / 10) | \(.submit_to_ack_latency_ms.p95 * 10 | round / 10) | \(.submit_to_ack_latency_ms.p99 * 10 | round / 10) | \(.submit_to_ack_latency_ms.max * 10 | round / 10) | \(.submit_latency_ms.p50 * 10 | round / 10) / \(.submit_latency_ms.p99 * 10 | round / 10) | \(.jobs_lost) of \(.submits_acknowledged) |"'
 if [[ -f "$DIR/latency/result.json" ]]; then
   echo "## Latency at a fixed rate (3 nodes)"
   echo
   echo "| Target submits/s | Achieved jobs/s | p50 (ms) | p95 (ms) | p99 (ms) | max (ms) | Submit p50 / p99 (ms) | Jobs lost |"
   echo "| --- | --- | --- | --- | --- | --- | --- | --- |"
-  jq -r '"| \(.config.Rate) | \(.ack_rate_per_sec | floor) | \(.submit_to_ack_latency_ms.p50 * 10 | round / 10) | \(.submit_to_ack_latency_ms.p95 * 10 | round / 10) | \(.submit_to_ack_latency_ms.p99 * 10 | round / 10) | \(.submit_to_ack_latency_ms.max * 10 | round / 10) | \(.submit_latency_ms.p50 * 10 | round / 10) / \(.submit_latency_ms.p99 * 10 | round / 10) | \(.jobs_lost) of \(.submits_acknowledged) |"' "$DIR/latency/result.json"
+  jq -r "$lat_row" "$DIR/latency/result.json"
+  echo
+elif compgen -G "$DIR/latency/*/result.json" >/dev/null; then
+  echo "## Latency at fixed rates (3 nodes)"
+  echo
+  echo "$(jq -r .params.latency_duration "$ENV") per rate, $(jq -r .params.producers "$ENV") producers and $(jq -r .params.workers "$ENV") workers."
+  echo
+  echo "| Target submits/s | Achieved jobs/s | p50 (ms) | p95 (ms) | p99 (ms) | max (ms) | Submit p50 / p99 (ms) | Jobs lost |"
+  echo "| --- | --- | --- | --- | --- | --- | --- | --- |"
+  jq -rs "sort_by(.config.Rate)[] | $lat_row" "$DIR"/latency/*/result.json
+  echo
+fi
+if [[ -f "$DIR/latency/skipped.txt" ]]; then
+  while read -r rate cap; do
+    echo "Not run: $rate submits/s, above the highest 3-node closed-loop rate measured in this run ($(r0 <<<"$cap") jobs/s)."
+  done < "$DIR/latency/skipped.txt"
   echo
 fi
 
@@ -67,8 +115,15 @@ if [[ -f "$DIR/chaos/result.json" ]]; then
   K="$DIR/chaos/kills.jsonl"
   echo "## Chaos: leader killed repeatedly under load (3 nodes)"
   echo
+  if jq -e .slurm "$ENV" >/dev/null; then
+    echo "\`pkill -KILL\` (SIGKILL) of the current leader's quorumq-server process every $(jq -r .params.kill_gap "$ENV") while"
+    echo "producers submit at $(jq -r .params.chaos_rate "$ENV")/s; the killed broker is restarted on the same node with the same"
+    echo "data directory and rejoins as a caught-up follower before the next kill. The probe runs"
+    echo "on the killed broker's node, started by the same command as the kill."
+  else
   echo "\`docker kill\` (SIGKILL) of the current leader every $(jq -r .params.kill_gap "$ENV") while producers submit at"
   echo "$(jq -r .params.chaos_rate "$ENV")/s; the killed node is restarted and rejoins before the next kill."
+  fi
   echo "Failover time is measured by \`quorumq-load probe\` from the kill until a Submit is"
   echo "acknowledged again (10 ms retry interval)."
   echo

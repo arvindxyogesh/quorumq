@@ -360,7 +360,7 @@ Reproduce with `docker build -t quorumq:dev . && scripts/bench.sh`.
 
 ## Running it
 
-Requires Go 1.24+; Docker for the cluster scripts; `jq` and `curl` for the
+Requires Go 1.27+; Docker for the cluster scripts; `jq` and `curl` for the
 scripts.
 
 ```sh
