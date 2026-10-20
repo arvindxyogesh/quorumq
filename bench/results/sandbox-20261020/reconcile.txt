@@ -1,0 +1,12 @@
+chaos                                    submitted   92452  lost 0
+latency                                  submitted   29984  lost 0
+throughput/n1-r1                         submitted   66926  lost 0
+throughput/n1-r2                         submitted   72479  lost 0
+throughput/n1-r3                         submitted   70577  lost 0
+throughput/n3-r1                         submitted   37272  lost 0
+throughput/n3-r2                         submitted   40559  lost 0
+throughput/n3-r3                         submitted   40579  lost 0
+throughput/n5-r1                         submitted   28626  lost 0
+throughput/n5-r2                         submitted   26519  lost 0
+throughput/n5-r3                         submitted   28274  lost 0
+total: 534247 acknowledged submits, 0 lost

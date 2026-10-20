@@ -1,0 +1,10 @@
+{"failover_ms":1218.166891,"attempts":2,"job_id":"8707","kill":1,"killed":"n1","new_leader":"n3","killed_at_ns":1792473979864977912,"gap_s":24.0}
+{"failover_ms":1498.164202,"attempts":3,"job_id":"15886","kill":2,"killed":"n3","new_leader":"n2","killed_at_ns":1792474005125447989,"gap_s":18.4}
+{"failover_ms":1211.114681,"attempts":2,"job_id":"24888","kill":3,"killed":"n2","new_leader":"n3","killed_at_ns":1792474036926909763,"gap_s":21.6}
+{"failover_ms":1358.75482,"attempts":3,"job_id":"33213","kill":4,"killed":"n3","new_leader":"n1","killed_at_ns":1792474065902918317,"gap_s":17.3}
+{"failover_ms":1443.014014,"attempts":2,"job_id":"44456","kill":5,"killed":"n1","new_leader":"n2","killed_at_ns":1792474104900593339,"gap_s":23.6}
+{"failover_ms":960.805472,"attempts":2,"job_id":"54065","kill":6,"killed":"n2","new_leader":"n1","killed_at_ns":1792474138502924135,"gap_s":16.2}
+{"failover_ms":1353.144454,"attempts":3,"job_id":"66466","kill":7,"killed":"n1","new_leader":"n2","killed_at_ns":1792474180487644344,"gap_s":20.1}
+{"failover_ms":1523.942066,"attempts":3,"job_id":"79899","kill":8,"killed":"n2","new_leader":"n1","killed_at_ns":1792474226927682204,"gap_s":19.5}
+{"failover_ms":957.007235,"attempts":2,"job_id":"92516","kill":9,"killed":"n1","new_leader":"n2","killed_at_ns":1792474274033755604,"gap_s":17.0}
+{"failover_ms":1304.382746,"attempts":3,"job_id":"92517","kill":10,"killed":"n2","new_leader":"n1","killed_at_ns":1792474300203041178,"gap_s":19.2}

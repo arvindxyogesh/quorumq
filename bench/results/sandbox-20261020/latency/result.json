@@ -1,0 +1,358 @@
+{
+  "label": "latency nodes=3 rate=500",
+  "addrs": "localhost:7071,localhost:7072,localhost:7073",
+  "config": {
+    "Queue": "latency",
+    "Producers": 32,
+    "Workers": 64,
+    "Rate": 500,
+    "Duration": 60000000000,
+    "PayloadSize": 256,
+    "Visibility": 30000000000,
+    "MaxRetries": 5,
+    "DrainTimeout": 120000000000,
+    "IdleSleep": 2000000,
+    "RequestTimeout": 30000000000,
+    "RunID": "dm9eyoduxb6v"
+  },
+  "started_at": "2026-10-20T01:24:48.241979915-04:00",
+  "gomaxprocs": 2,
+  "num_cpu": 2,
+  "window_seconds": 60,
+  "drain_seconds": 0.034281772,
+  "submits_acknowledged": 29984,
+  "submit_errors": 0,
+  "jobs_completed": 29984,
+  "jobs_lost": 0,
+  "duplicate_completions": 0,
+  "stale_acks_rejected": 0,
+  "ack_errors": 0,
+  "claim_errors": 0,
+  "empty_claims": 368621,
+  "submit_rate_per_sec": 499.73333333333335,
+  "ack_rate_per_sec": 499.2,
+  "backlog_at_window_end": 32,
+  "submit_to_ack_latency_ms": {
+    "count": 29984,
+    "p50": 48.154232,
+    "p95": 72.473164,
+    "p99": 93.898017,
+    "max": 135.91621,
+    "mean": 49.95705289481043
+  },
+  "submit_latency_ms": {
+    "count": 29984,
+    "p50": 20.819581,
+    "p95": 33.787394,
+    "p99": 43.245795,
+    "max": 59.159866,
+    "mean": 21.56089441592195
+  },
+  "per_second": [
+    {
+      "t": 0,
+      "submitted": 480,
+      "completed": 480
+    },
+    {
+      "t": 1,
+      "submitted": 480,
+      "completed": 480
+    },
+    {
+      "t": 2,
+      "submitted": 512,
+      "completed": 480
+    },
+    {
+      "t": 3,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 4,
+      "submitted": 480,
+      "completed": 512
+    },
+    {
+      "t": 5,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 6,
+      "submitted": 512,
+      "completed": 480
+    },
+    {
+      "t": 7,
+      "submitted": 480,
+      "completed": 512
+    },
+    {
+      "t": 8,
+      "submitted": 512,
+      "completed": 480
+    },
+    {
+      "t": 9,
+      "submitted": 480,
+      "completed": 480
+    },
+    {
+      "t": 10,
+      "submitted": 500,
+      "completed": 512
+    },
+    {
+      "t": 11,
+      "submitted": 524,
+      "completed": 512
+    },
+    {
+      "t": 12,
+      "submitted": 480,
+      "completed": 512
+    },
+    {
+      "t": 13,
+      "submitted": 512,
+      "completed": 480
+    },
+    {
+      "t": 14,
+      "submitted": 496,
+      "completed": 512
+    },
+    {
+      "t": 15,
+      "submitted": 496,
+      "completed": 480
+    },
+    {
+      "t": 16,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 17,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 18,
+      "submitted": 480,
+      "completed": 490
+    },
+    {
+      "t": 19,
+      "submitted": 512,
+      "completed": 504
+    },
+    {
+      "t": 20,
+      "submitted": 480,
+      "completed": 510
+    },
+    {
+      "t": 21,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 22,
+      "submitted": 489,
+      "completed": 480
+    },
+    {
+      "t": 23,
+      "submitted": 503,
+      "completed": 512
+    },
+    {
+      "t": 24,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 25,
+      "submitted": 512,
+      "completed": 480
+    },
+    {
+      "t": 26,
+      "submitted": 480,
+      "completed": 480
+    },
+    {
+      "t": 27,
+      "submitted": 498,
+      "completed": 512
+    },
+    {
+      "t": 28,
+      "submitted": 494,
+      "completed": 512
+    },
+    {
+      "t": 29,
+      "submitted": 512,
+      "completed": 480
+    },
+    {
+      "t": 30,
+      "submitted": 481,
+      "completed": 512
+    },
+    {
+      "t": 31,
+      "submitted": 511,
+      "completed": 512
+    },
+    {
+      "t": 32,
+      "submitted": 512,
+      "completed": 480
+    },
+    {
+      "t": 33,
+      "submitted": 480,
+      "completed": 512
+    },
+    {
+      "t": 34,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 35,
+      "submitted": 512,
+      "completed": 480
+    },
+    {
+      "t": 36,
+      "submitted": 480,
+      "completed": 512
+    },
+    {
+      "t": 37,
+      "submitted": 512,
+      "completed": 480
+    },
+    {
+      "t": 38,
+      "submitted": 510,
+      "completed": 512
+    },
+    {
+      "t": 39,
+      "submitted": 482,
+      "completed": 512
+    },
+    {
+      "t": 40,
+      "submitted": 512,
+      "completed": 480
+    },
+    {
+      "t": 41,
+      "submitted": 490,
+      "completed": 512
+    },
+    {
+      "t": 42,
+      "submitted": 502,
+      "completed": 512
+    },
+    {
+      "t": 43,
+      "submitted": 512,
+      "completed": 480
+    },
+    {
+      "t": 44,
+      "submitted": 480,
+      "completed": 512
+    },
+    {
+      "t": 45,
+      "submitted": 512,
+      "completed": 482
+    },
+    {
+      "t": 46,
+      "submitted": 512,
+      "completed": 510
+    },
+    {
+      "t": 47,
+      "submitted": 480,
+      "completed": 512
+    },
+    {
+      "t": 48,
+      "submitted": 512,
+      "completed": 481
+    },
+    {
+      "t": 49,
+      "submitted": 480,
+      "completed": 511
+    },
+    {
+      "t": 50,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 51,
+      "submitted": 512,
+      "completed": 485
+    },
+    {
+      "t": 52,
+      "submitted": 480,
+      "completed": 507
+    },
+    {
+      "t": 53,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 54,
+      "submitted": 512,
+      "completed": 480
+    },
+    {
+      "t": 55,
+      "submitted": 480,
+      "completed": 481
+    },
+    {
+      "t": 56,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 57,
+      "submitted": 480,
+      "completed": 511
+    },
+    {
+      "t": 58,
+      "submitted": 512,
+      "completed": 512
+    },
+    {
+      "t": 59,
+      "submitted": 512,
+      "completed": 480
+    },
+    {
+      "t": 60,
+      "submitted": 0,
+      "completed": 32
+    }
+  ]
+}
