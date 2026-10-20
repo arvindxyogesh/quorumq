@@ -23,9 +23,11 @@ type Broker interface {
 	Submit(ctx context.Context, queue string, payload []byte, maxRetries uint32) (uint64, error)
 	Claim(ctx context.Context, queue, workerID string, visibility time.Duration) (*queue.Job, error)
 	Ack(ctx context.Context, jobID uint64, leaseID string) error
-	Nack(ctx context.Context, jobID uint64, leaseID string) error
+	Nack(ctx context.Context, jobID uint64, leaseID, reason string) error
+	Redrive(ctx context.Context, jobID uint64) error
 	Get(ctx context.Context, jobID uint64) (*queue.Job, error)
 	Stats(ctx context.Context, queue string) (queue.Stats, error)
+	ListDead(ctx context.Context, queue string, limit int) ([]*queue.Job, error)
 }
 
 // Server is the gRPC QueueService implementation.
@@ -93,13 +95,43 @@ func (s *Server) NackJob(ctx context.Context, req *pb.NackJobRequest) (*pb.NackJ
 	if err != nil {
 		return nil, err
 	}
-	if err := validateLeaseID(req.GetLeaseId()); err != nil {
+	if err := firstErr(validateLeaseID(req.GetLeaseId()), validateReason(req.GetReason())); err != nil {
 		return nil, err
 	}
-	if err := s.broker.Nack(ctx, id, req.GetLeaseId()); err != nil {
+	if err := s.broker.Nack(ctx, id, req.GetLeaseId(), req.GetReason()); err != nil {
 		return nil, toStatus(err)
 	}
 	return &pb.NackJobResponse{}, nil
+}
+
+func (s *Server) RedriveJob(ctx context.Context, req *pb.RedriveJobRequest) (*pb.RedriveJobResponse, error) {
+	id, err := parseJobID(req.GetJobId())
+	if err != nil {
+		return nil, err
+	}
+	if err := s.broker.Redrive(ctx, id); err != nil {
+		return nil, toStatus(err)
+	}
+	return &pb.RedriveJobResponse{}, nil
+}
+
+func (s *Server) ListDeadJobs(ctx context.Context, req *pb.ListDeadJobsRequest) (*pb.ListDeadJobsResponse, error) {
+	limit, err := listLimit(req.GetLimit())
+	if err != nil {
+		return nil, err
+	}
+	if err := validateQueue(req.GetQueue()); err != nil {
+		return nil, err
+	}
+	jobs, err := s.broker.ListDead(ctx, req.GetQueue(), limit)
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	resp := &pb.ListDeadJobsResponse{Jobs: make([]*pb.Job, len(jobs))}
+	for i, j := range jobs {
+		resp.Jobs[i] = toProto(j)
+	}
+	return resp, nil
 }
 
 func (s *Server) GetJob(ctx context.Context, req *pb.GetJobRequest) (*pb.GetJobResponse, error) {
@@ -127,6 +159,8 @@ func (s *Server) QueueStats(ctx context.Context, req *pb.QueueStatsRequest) (*pb
 		Visible:  st.Visible,
 		InFlight: st.InFlight,
 		Acked:    st.Acked,
+		Delayed:  st.Delayed,
+		Dead:     st.Dead,
 	}, nil
 }
 
@@ -145,7 +179,7 @@ func toStatus(err error) error {
 		return status.Error(codes.Unavailable, err.Error())
 	case errors.Is(err, queue.ErrNotFound):
 		return status.Error(codes.NotFound, err.Error())
-	case errors.Is(err, queue.ErrLeaseMismatch):
+	case errors.Is(err, queue.ErrLeaseMismatch), errors.Is(err, queue.ErrNotDead):
 		return status.Error(codes.FailedPrecondition, err.Error())
 	case errors.Is(err, context.Canceled):
 		return status.Error(codes.Canceled, err.Error())
@@ -186,9 +220,13 @@ func toProto(j *queue.Job) *pb.Job {
 		MaxRetries: j.MaxRetries,
 		CreatedAt:  timestamppb.New(time.Unix(0, j.CreatedAt)),
 		WorkerId:   j.WorkerID,
+		LastError:  j.LastError,
 	}
 	if j.VisibleAt != 0 {
 		out.VisibleAt = timestamppb.New(time.Unix(0, j.VisibleAt))
+	}
+	if j.DeadAt != 0 {
+		out.DeadAt = timestamppb.New(time.Unix(0, j.DeadAt))
 	}
 	return out
 }
@@ -201,6 +239,8 @@ func stateToProto(s queue.State) pb.JobState {
 		return pb.JobState_JOB_STATE_LEASED
 	case queue.StateAcked:
 		return pb.JobState_JOB_STATE_ACKED
+	case queue.StateDead:
+		return pb.JobState_JOB_STATE_DEAD
 	default:
 		return pb.JobState_JOB_STATE_UNSPECIFIED
 	}

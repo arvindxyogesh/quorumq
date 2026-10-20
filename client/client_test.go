@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -20,6 +21,8 @@ import (
 	"github.com/arvindxyogesh/quorumq/internal/server"
 )
 
+// newLocalBroker returns a single-process broker that retries nacked jobs
+// immediately, so tests do not wait out a backoff.
 func newLocalBroker(t *testing.T) *broker.Local {
 	t.Helper()
 	store, err := queue.Open(filepath.Join(t.TempDir(), "queue.db"))
@@ -27,7 +30,7 @@ func newLocalBroker(t *testing.T) *broker.Local {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	return broker.NewLocal(store)
+	return broker.NewLocal(store, broker.WithRetryPolicy(broker.RetryPolicy{}))
 }
 
 // startBufconn runs a real gRPC server over an in-memory listener.
@@ -113,7 +116,7 @@ func TestNackRedelivers(t *testing.T) {
 	id, _ := c.Submit(ctx, "q", []byte("x"), 3)
 
 	first, _ := c.Claim(ctx, "q", "w1", time.Hour)
-	if err := c.Nack(ctx, id, first.ID); err != nil {
+	if err := c.Nack(ctx, id, first.ID, "transient"); err != nil {
 		t.Fatalf("Nack: %v", err)
 	}
 	second, err := c.Claim(ctx, "q", "w2", time.Hour)
@@ -195,11 +198,44 @@ func TestClientGivesUpWhenContextExpires(t *testing.T) {
 	defer cancel()
 
 	_, err = c.Submit(ctx, "q", []byte("x"), 0)
-	if status.Code(err) != codes.Unavailable {
-		t.Fatalf("got %v, want the last Unavailable error", err)
+	if status.Code(err) != codes.DeadlineExceeded || !strings.Contains(err.Error(), "not the leader") {
+		t.Fatalf("got %v, want DeadlineExceeded carrying the last cluster error", err)
 	}
 	if f.calls.Load() < 2 {
 		t.Fatalf("expected retries before giving up, got %d calls", f.calls.Load())
+	}
+}
+
+func TestDeadLetterAndRedrive(t *testing.T) {
+	c := startBufconn(t, newLocalBroker(t))
+	ctx := context.Background()
+	id, _ := c.Submit(ctx, "q", []byte("poison"), 0) // no retries
+
+	lease, _ := c.Claim(ctx, "q", "w1", time.Minute)
+	if err := c.Nack(ctx, id, lease.ID, "cannot parse payload"); err != nil {
+		t.Fatalf("Nack: %v", err)
+	}
+	dead, err := c.ListDead(ctx, "q", 0)
+	if err != nil || len(dead) != 1 || dead[0].GetId() != id {
+		t.Fatalf("ListDead = %v, %v", dead, err)
+	}
+	if dead[0].GetState() != pb.JobState_JOB_STATE_DEAD || dead[0].GetLastError() != "cannot parse payload" || dead[0].GetDeadAt() == nil {
+		t.Fatalf("dead job = %v", dead[0])
+	}
+	stats, _ := c.Stats(ctx, "q")
+	if stats.GetDead() != 1 || stats.GetVisible() != 0 {
+		t.Fatalf("stats = %v", stats)
+	}
+
+	if err := c.Redrive(ctx, id); err != nil {
+		t.Fatalf("Redrive: %v", err)
+	}
+	again, err := c.Claim(ctx, "q", "w2", time.Minute)
+	if err != nil || again == nil || again.Job.GetId() != id || again.Job.GetAttempts() != 1 {
+		t.Fatalf("claim after redrive: %+v, %v", again, err)
+	}
+	if err := c.Redrive(ctx, id); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("redrive of a live job: got %v, want FailedPrecondition", err)
 	}
 }
 

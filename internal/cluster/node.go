@@ -25,6 +25,7 @@ type Node struct {
 	raft      *raft.Raft
 	store     *queue.Store
 	logStore  *raftboltdb.BoltStore
+	snaps     *raft.FileSnapshotStore
 	transport *raft.NetworkTransport
 	peers     map[raft.ServerID]Peer
 	logger    *slog.Logger
@@ -50,6 +51,9 @@ func NewNode(cfg Config, logger *slog.Logger) (*Node, error) {
 	}
 	if cfg.Timing == (Timing{}) {
 		cfg.Timing = LANTiming
+	}
+	if cfg.Snapshot == (SnapshotPolicy{}) {
+		cfg.Snapshot = DefaultSnapshotPolicy
 	}
 	if cfg.RaftLogLevel == "" {
 		cfg.RaftLogLevel = "info"
@@ -92,10 +96,10 @@ func (n *Node) start() error {
 	if err != nil {
 		return err
 	}
-	snaps, err := raft.NewFileSnapshotStoreWithLogger(cfg.DataDir, snapshotsRetain, hlog)
-	if err != nil {
+	if n.snaps, err = raft.NewFileSnapshotStoreWithLogger(cfg.DataDir, snapshotsRetain, hlog); err != nil {
 		return fmt.Errorf("open snapshot store: %w", err)
 	}
+	snaps := n.snaps
 	if err := n.restoreIfBehind(snaps); err != nil {
 		return err
 	}
@@ -114,6 +118,9 @@ func (n *Node) start() error {
 	rc.HeartbeatTimeout = cfg.Timing.HeartbeatTimeout
 	rc.ElectionTimeout = cfg.Timing.ElectionTimeout
 	rc.LeaderLeaseTimeout = cfg.Timing.LeaderLeaseTimeout
+	rc.SnapshotThreshold = cfg.Snapshot.Threshold
+	rc.SnapshotInterval = cfg.Snapshot.Interval
+	rc.TrailingLogs = cfg.Snapshot.TrailingLogs
 	// The FSM is persistent and remembers the last index it applied, so on
 	// restart Raft only needs to replay entries after that point; restoring
 	// the latest snapshot first would throw away newer on-disk state.
@@ -229,24 +236,30 @@ type Status struct {
 	CommitIndex     uint64 `json:"commit_index"`
 	AppliedIndex    uint64 `json:"applied_index"`
 	FSMAppliedIndex uint64 `json:"fsm_applied_index"`
-	Peers           int    `json:"peers"`
+	// LastSnapshotIndex is the log index covered by the newest snapshot;
+	// entries up to roughly this point may have been compacted away.
+	LastSnapshotIndex uint64 `json:"last_snapshot_index"`
+	Peers             int    `json:"peers"`
 }
 
 // Status returns the node's current Raft state.
 func (n *Node) Status() Status {
 	_, leaderID := n.raft.LeaderWithID()
-	term, _ := strconv.ParseUint(n.raft.Stats()["term"], 10, 64)
+	stats := n.raft.Stats()
+	term, _ := strconv.ParseUint(stats["term"], 10, 64)
+	lastSnap, _ := strconv.ParseUint(stats["last_snapshot_index"], 10, 64)
 	fsmApplied, _ := n.store.AppliedIndex()
 	return Status{
-		NodeID:          n.cfg.NodeID,
-		State:           n.raft.State().String(),
-		Term:            term,
-		LeaderID:        string(leaderID),
-		LeaderAddr:      n.LeaderClientAddr(),
-		LastLogIndex:    n.raft.LastIndex(),
-		CommitIndex:     n.raft.CommitIndex(),
-		AppliedIndex:    n.raft.AppliedIndex(),
-		FSMAppliedIndex: fsmApplied,
-		Peers:           len(n.peers),
+		NodeID:            n.cfg.NodeID,
+		State:             n.raft.State().String(),
+		Term:              term,
+		LeaderID:          string(leaderID),
+		LeaderAddr:        n.LeaderClientAddr(),
+		LastLogIndex:      n.raft.LastIndex(),
+		CommitIndex:       n.raft.CommitIndex(),
+		AppliedIndex:      n.raft.AppliedIndex(),
+		FSMAppliedIndex:   fsmApplied,
+		LastSnapshotIndex: lastSnap,
+		Peers:             len(n.peers),
 	}
 }

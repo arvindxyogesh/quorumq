@@ -15,10 +15,10 @@ import (
 // Broker serves the queue API from a Raft node. Every operation, including
 // reads, is handled by the leader:
 //
-//   - Writes (submit, claim, ack, nack) are proposed to the Raft log and
+//   - Writes (submit, claim, ack, nack, redrive) are proposed to the Raft log and
 //     return once a quorum has committed them and the leader has applied
 //     them, so an acknowledged submit survives the loss of any minority.
-//   - Reads (get, stats) first issue a Raft barrier, which only succeeds if
+//   - Reads (get, stats, list dead) first issue a Raft barrier, which only succeeds if
 //     this node is still the leader and has applied everything committed
 //     before it. That makes reads linearizable: a deposed leader on the
 //     wrong side of a partition cannot return stale data.
@@ -26,13 +26,14 @@ import (
 // On a follower every call fails with *broker.NotLeaderError naming the
 // leader, and the client retries there.
 type Broker struct {
-	node *Node
-	now  func() time.Time
+	node  *Node
+	now   func() time.Time
+	retry broker.RetryPolicy
 }
 
-// NewBroker returns a Broker for node.
-func NewBroker(node *Node) *Broker {
-	return &Broker{node: node, now: time.Now}
+// NewBroker returns a Broker for node that retries nacked jobs under retry.
+func NewBroker(node *Node, retry broker.RetryPolicy) *Broker {
+	return &Broker{node: node, now: time.Now, retry: retry}
 }
 
 func (b *Broker) Submit(ctx context.Context, queueName string, payload []byte, maxRetries uint32) (uint64, error) {
@@ -66,14 +67,29 @@ func (b *Broker) Ack(ctx context.Context, jobID uint64, leaseID string) error {
 	return r.Err
 }
 
-func (b *Broker) Nack(ctx context.Context, jobID uint64, leaseID string) error {
-	r, err := b.propose(ctx, queue.Command{Op: queue.OpNack, Nack: &queue.NackCmd{
-		JobID: jobID, LeaseID: leaseID, Now: b.now().UnixNano(),
+func (b *Broker) Nack(ctx context.Context, jobID uint64, leaseID, reason string) error {
+	r, err := b.propose(ctx, queue.Command{Op: queue.OpNack, Nack: b.retry.NackCmd(jobID, leaseID, reason, b.now())})
+	if err != nil {
+		return err
+	}
+	return r.Err
+}
+
+func (b *Broker) Redrive(ctx context.Context, jobID uint64) error {
+	r, err := b.propose(ctx, queue.Command{Op: queue.OpRedrive, Redrive: &queue.RedriveCmd{
+		JobID: jobID, Now: b.now().UnixNano(),
 	}})
 	if err != nil {
 		return err
 	}
 	return r.Err
+}
+
+func (b *Broker) ListDead(ctx context.Context, queueName string, limit int) ([]*queue.Job, error) {
+	if err := b.barrier(ctx); err != nil {
+		return nil, err
+	}
+	return b.node.store.ListDead(queueName, limit)
 }
 
 func (b *Broker) Get(ctx context.Context, jobID uint64) (*queue.Job, error) {

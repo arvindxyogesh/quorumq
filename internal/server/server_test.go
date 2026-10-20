@@ -130,7 +130,7 @@ func TestClaimEmptyQueueHasNoJob(t *testing.T) {
 func TestVisibilityTimeoutThroughAPI(t *testing.T) {
 	s, clock := newTestServer(t)
 	ctx := context.Background()
-	sub, _ := s.SubmitJob(ctx, &pb.SubmitJobRequest{Queue: "q", Payload: []byte("x")})
+	sub, _ := s.SubmitJob(ctx, &pb.SubmitJobRequest{Queue: "q", Payload: []byte("x"), MaxRetries: 3})
 	claimReq := &pb.ClaimJobRequest{Queue: "q", WorkerId: "w", VisibilityTimeout: durationpb.New(5 * time.Second)}
 
 	first, _ := s.ClaimJob(ctx, claimReq)
@@ -149,4 +149,34 @@ func TestVisibilityTimeoutThroughAPI(t *testing.T) {
 	if stats.GetInFlight() != 1 || stats.GetVisible() != 0 {
 		t.Fatalf("stats = %v", stats)
 	}
+}
+
+func TestListDeadJobsValidation(t *testing.T) {
+	s, _ := newTestServer(t)
+	_, err := s.ListDeadJobs(context.Background(), &pb.ListDeadJobsRequest{Queue: "q", Limit: MaxListLimit + 1})
+	wantCode(t, err, codes.InvalidArgument)
+	_, err = s.NackJob(context.Background(), &pb.NackJobRequest{JobId: "1", LeaseId: "l", Reason: strings.Repeat("x", 1025)})
+	wantCode(t, err, codes.InvalidArgument)
+}
+
+func TestExpiredLeaseWithoutRetriesIsDeadLettered(t *testing.T) {
+	s, clock := newTestServer(t)
+	ctx := context.Background()
+	sub, _ := s.SubmitJob(ctx, &pb.SubmitJobRequest{Queue: "q", MaxRetries: 0})
+	claimReq := &pb.ClaimJobRequest{Queue: "q", WorkerId: "w", VisibilityTimeout: durationpb.New(time.Second)}
+	if _, err := s.ClaimJob(ctx, claimReq); err != nil {
+		t.Fatal(err)
+	}
+	clock.Advance(2 * time.Second)
+
+	resp, err := s.ClaimJob(ctx, claimReq)
+	if err != nil || resp.GetJob() != nil {
+		t.Fatalf("expected no redelivery, got %v, %v", resp, err)
+	}
+	got, _ := s.GetJob(ctx, &pb.GetJobRequest{JobId: sub.GetJobId()})
+	if got.GetJob().GetState() != pb.JobState_JOB_STATE_DEAD {
+		t.Fatalf("job = %v, want DEAD", got.GetJob())
+	}
+	_, err = s.RedriveJob(ctx, &pb.RedriveJobRequest{JobId: "999"})
+	wantCode(t, err, codes.NotFound)
 }

@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	pb "github.com/arvindxyogesh/quorumq/api/quorumq/v1"
+	"github.com/arvindxyogesh/quorumq/internal/broker"
 	"github.com/arvindxyogesh/quorumq/internal/cluster"
 	"github.com/arvindxyogesh/quorumq/internal/server"
 )
@@ -45,6 +46,8 @@ type flags struct {
 	dataDir       string
 	bootstrap     bool
 	logLevel      string
+	retry         broker.RetryPolicy
+	snapshot      cluster.SnapshotPolicy
 }
 
 func main() {
@@ -66,6 +69,11 @@ func parseFlags() flags {
 	flag.StringVar(&f.dataDir, "data-dir", "./data", "directory for the Raft log, snapshots and queue state")
 	flag.BoolVar(&f.bootstrap, "bootstrap", true, "bootstrap the cluster from -peers if this node has no Raft state")
 	flag.StringVar(&f.logLevel, "log-level", "info", "log level: debug, info, warn or error")
+	flag.DurationVar(&f.retry.BackoffBase, "retry-backoff", broker.DefaultRetryPolicy.BackoffBase, "delay before retrying a nacked job; doubles per failure (0 retries immediately)")
+	flag.DurationVar(&f.retry.BackoffMax, "retry-backoff-max", broker.DefaultRetryPolicy.BackoffMax, "maximum retry delay")
+	flag.Uint64Var(&f.snapshot.Threshold, "snapshot-threshold", cluster.DefaultSnapshotPolicy.Threshold, "take a snapshot after this many new log entries")
+	flag.DurationVar(&f.snapshot.Interval, "snapshot-interval", cluster.DefaultSnapshotPolicy.Interval, "how often to check whether a snapshot is due")
+	flag.Uint64Var(&f.snapshot.TrailingLogs, "trailing-logs", cluster.DefaultSnapshotPolicy.TrailingLogs, "log entries kept after a snapshot, so slightly lagging followers can catch up without one")
 	flag.Parse()
 	return f
 }
@@ -91,6 +99,7 @@ func run() error {
 		DataDir:       f.dataDir,
 		Peers:         peers,
 		Bootstrap:     f.bootstrap,
+		Snapshot:      f.snapshot,
 	}, logger)
 	if err != nil {
 		return err
@@ -106,7 +115,7 @@ func run() error {
 		return fmt.Errorf("listen on %s: %w", f.addr, err)
 	}
 	gs := grpc.NewServer(grpc.ChainUnaryInterceptor(logRequests(logger)))
-	pb.RegisterQueueServiceServer(gs, server.New(cluster.NewBroker(node)))
+	pb.RegisterQueueServiceServer(gs, server.New(cluster.NewBroker(node, f.retry)))
 	healthSrv := health.NewServer()
 	healthpb.RegisterHealthServer(gs, healthSrv)
 	reflection.Register(gs)

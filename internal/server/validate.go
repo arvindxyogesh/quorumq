@@ -18,6 +18,9 @@ const (
 	MinVisibilityTimeout     = time.Second
 	MaxVisibilityTimeout     = 12 * time.Hour
 	maxWorkerIDLen           = 128
+	maxReasonLen             = 1024
+	DefaultListLimit         = 20
+	MaxListLimit             = 100
 )
 
 var queueNameRE = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,80}$`)
@@ -81,6 +84,24 @@ func parseJobID(s string) (uint64, error) {
 }
 
 func formatJobID(id uint64) string { return strconv.FormatUint(id, 10) }
+
+func validateReason(s string) error {
+	if len(s) > maxReasonLen {
+		return invalid("reason is %d bytes; the limit is %d", len(s), maxReasonLen)
+	}
+	return nil
+}
+
+func listLimit(n uint32) (int, error) {
+	switch {
+	case n == 0:
+		return DefaultListLimit, nil
+	case n > MaxListLimit:
+		return 0, invalid("limit is %d; the maximum is %d", n, MaxListLimit)
+	default:
+		return int(n), nil
+	}
+}
 
 func validateLeaseID(s string) error {
 	if s == "" {

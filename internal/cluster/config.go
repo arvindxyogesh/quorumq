@@ -60,6 +60,24 @@ var LANTiming = Timing{
 	LeaderLeaseTimeout: 250 * time.Millisecond,
 }
 
+// SnapshotPolicy controls when Raft snapshots the state machine and how much
+// log it keeps afterwards. Snapshots bound both disk usage and the time a
+// restarted or new node needs to catch up.
+type SnapshotPolicy struct {
+	// Threshold is how many log entries must accumulate since the last
+	// snapshot before a new one is taken.
+	Threshold uint64
+	// Interval is how often Raft checks whether Threshold has been reached.
+	Interval time.Duration
+	// TrailingLogs is how many entries are kept after a snapshot, so a
+	// follower that is only slightly behind can catch up from the log
+	// instead of being sent the whole snapshot.
+	TrailingLogs uint64
+}
+
+// DefaultSnapshotPolicy matches hashicorp/raft's defaults.
+var DefaultSnapshotPolicy = SnapshotPolicy{Threshold: 8192, Interval: 2 * time.Minute, TrailingLogs: 10240}
+
 // Config configures a Node.
 type Config struct {
 	NodeID string
@@ -76,6 +94,7 @@ type Config struct {
 	// same Peers: hashicorp/raft treats identical bootstraps as one.
 	Bootstrap bool
 	Timing    Timing
+	Snapshot  SnapshotPolicy
 	// ApplyTimeout bounds how long a proposal may wait to enter the log.
 	ApplyTimeout time.Duration
 	// RaftLogLevel is the hashicorp/raft log level ("info" by default).

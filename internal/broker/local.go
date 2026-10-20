@@ -14,10 +14,31 @@ import (
 	"github.com/arvindxyogesh/quorumq/internal/queue"
 )
 
+// RetryPolicy controls the backoff before a nacked job is retried.
+type RetryPolicy struct {
+	// BackoffBase is the delay after the first failure; it doubles with each
+	// further failure.
+	BackoffBase time.Duration
+	// BackoffMax caps the delay.
+	BackoffMax time.Duration
+}
+
+// DefaultRetryPolicy retries after 1s, 2s, 4s, ... up to 5 minutes.
+var DefaultRetryPolicy = RetryPolicy{BackoffBase: time.Second, BackoffMax: 5 * time.Minute}
+
+// NackCmd builds the command for a nack under this policy.
+func (p RetryPolicy) NackCmd(jobID uint64, leaseID, reason string, now time.Time) *queue.NackCmd {
+	return &queue.NackCmd{
+		JobID: jobID, LeaseID: leaseID, Reason: reason,
+		BackoffBase: p.BackoffBase, BackoffMax: p.BackoffMax, Now: now.UnixNano(),
+	}
+}
+
 // Local is a single-node broker backed by one queue.Store.
 type Local struct {
 	store *queue.Store
 	now   func() time.Time
+	retry RetryPolicy
 }
 
 // Option configures a Local broker.
@@ -28,9 +49,14 @@ func WithClock(now func() time.Time) Option {
 	return func(l *Local) { l.now = now }
 }
 
+// WithRetryPolicy overrides DefaultRetryPolicy.
+func WithRetryPolicy(p RetryPolicy) Option {
+	return func(l *Local) { l.retry = p }
+}
+
 // NewLocal returns a broker that applies commands to store.
 func NewLocal(store *queue.Store, opts ...Option) *Local {
-	l := &Local{store: store, now: time.Now}
+	l := &Local{store: store, now: time.Now, retry: DefaultRetryPolicy}
 	for _, opt := range opts {
 		opt(l)
 	}
@@ -60,8 +86,16 @@ func (l *Local) Ack(_ context.Context, jobID uint64, leaseID string) error {
 	return l.store.Ack(queue.AckCmd{JobID: jobID, LeaseID: leaseID, Now: l.now().UnixNano()})
 }
 
-func (l *Local) Nack(_ context.Context, jobID uint64, leaseID string) error {
-	return l.store.Nack(queue.NackCmd{JobID: jobID, LeaseID: leaseID, Now: l.now().UnixNano()})
+func (l *Local) Nack(_ context.Context, jobID uint64, leaseID, reason string) error {
+	return l.store.Nack(*l.retry.NackCmd(jobID, leaseID, reason, l.now()))
+}
+
+func (l *Local) Redrive(_ context.Context, jobID uint64) error {
+	return l.store.Redrive(queue.RedriveCmd{JobID: jobID, Now: l.now().UnixNano()})
+}
+
+func (l *Local) ListDead(_ context.Context, queueName string, limit int) ([]*queue.Job, error) {
+	return l.store.ListDead(queueName, limit)
 }
 
 func (l *Local) Get(_ context.Context, jobID uint64) (*queue.Job, error) {

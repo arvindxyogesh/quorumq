@@ -33,6 +33,11 @@ func freeAddr(t *testing.T) string {
 
 func newTestCluster(t *testing.T, size int) *testCluster {
 	t.Helper()
+	return newTestClusterWith(t, size, SnapshotPolicy{})
+}
+
+func newTestClusterWith(t *testing.T, size int, snap SnapshotPolicy) *testCluster {
+	t.Helper()
 	peers := make([]Peer, size)
 	for i := range peers {
 		peers[i] = Peer{ID: fmt.Sprintf("n%d", i+1), RaftAddr: freeAddr(t), ClientAddr: fmt.Sprintf("client-n%d:7070", i+1)}
@@ -40,7 +45,7 @@ func newTestCluster(t *testing.T, size int) *testCluster {
 	c := &testCluster{t: t, nodes: make([]*Node, size)}
 	for i, p := range peers {
 		c.cfgs = append(c.cfgs, Config{
-			NodeID: p.ID, RaftBind: p.RaftAddr, DataDir: t.TempDir(), Peers: peers, Bootstrap: true, RaftLogLevel: "off",
+			NodeID: p.ID, RaftBind: p.RaftAddr, DataDir: t.TempDir(), Peers: peers, Bootstrap: true, RaftLogLevel: "off", Snapshot: snap,
 			Timing: Timing{HeartbeatTimeout: 200 * time.Millisecond, ElectionTimeout: 200 * time.Millisecond, LeaderLeaseTimeout: 100 * time.Millisecond},
 		})
 		c.start(i)
@@ -128,7 +133,7 @@ func submitN(t *testing.T, b *Broker, n int) []uint64 {
 func TestReplicatesToEveryNode(t *testing.T) {
 	c := newTestCluster(t, 3)
 	leader := c.waitForLeader()
-	submitN(t, NewBroker(c.nodes[leader]), 20)
+	submitN(t, NewBroker(c.nodes[leader], broker.DefaultRetryPolicy), 20)
 	c.waitForConvergence()
 
 	for _, n := range c.nodes {
@@ -151,7 +156,7 @@ func TestFollowerRedirectsToLeader(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	b := NewBroker(c.nodes[follower])
+	b := NewBroker(c.nodes[follower], broker.DefaultRetryPolicy)
 	_, err := b.Submit(ctx, "q", []byte("x"), 0)
 	var nl *broker.NotLeaderError
 	if !errors.As(err, &nl) {
@@ -169,14 +174,14 @@ func TestFollowerRedirectsToLeader(t *testing.T) {
 func TestCommittedJobsSurviveLeaderLoss(t *testing.T) {
 	c := newTestCluster(t, 3)
 	old := c.waitForLeader()
-	ids := submitN(t, NewBroker(c.nodes[old]), 10)
+	ids := submitN(t, NewBroker(c.nodes[old], broker.DefaultRetryPolicy), 10)
 
 	c.stop(old)
 	leader := c.waitForLeader()
 	if leader == old {
 		t.Fatal("stopped node is still leader")
 	}
-	b := NewBroker(c.nodes[leader])
+	b := NewBroker(c.nodes[leader], broker.DefaultRetryPolicy)
 	ctx := context.Background()
 	for _, id := range ids {
 		j, err := b.Get(ctx, id)
@@ -195,12 +200,12 @@ func TestCommittedJobsSurviveLeaderLoss(t *testing.T) {
 func TestRestartedNodeDoesNotReapplyLog(t *testing.T) {
 	c := newTestCluster(t, 3)
 	leader := c.waitForLeader()
-	submitN(t, NewBroker(c.nodes[leader]), 15)
+	submitN(t, NewBroker(c.nodes[leader], broker.DefaultRetryPolicy), 15)
 	c.waitForConvergence()
 
 	follower := (leader + 1) % 3
 	c.stop(follower)
-	submitN(t, NewBroker(c.nodes[leader]), 5) // committed while it is down
+	submitN(t, NewBroker(c.nodes[leader], broker.DefaultRetryPolicy), 5) // committed while it is down
 	c.start(follower)
 	c.waitForConvergence()
 

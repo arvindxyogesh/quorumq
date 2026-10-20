@@ -160,10 +160,35 @@ func (c *Client) Ack(ctx context.Context, jobID, leaseID string) error {
 	})
 }
 
-// Nack returns a leased job to the queue.
-func (c *Client) Nack(ctx context.Context, jobID, leaseID string) error {
+// Nack reports that processing failed. The job is retried after the
+// server's backoff, or dead-lettered if it has no retries left. reason is
+// optional and is kept on the job as last_error.
+func (c *Client) Nack(ctx context.Context, jobID, leaseID, reason string) error {
 	return c.call(ctx, func(ctx context.Context, api pb.QueueServiceClient) error {
-		_, err := api.NackJob(ctx, &pb.NackJobRequest{JobId: jobID, LeaseId: leaseID})
+		_, err := api.NackJob(ctx, &pb.NackJobRequest{JobId: jobID, LeaseId: leaseID, Reason: reason})
+		return err
+	})
+}
+
+// ListDead returns up to limit of a queue's dead-lettered jobs, oldest
+// first. A zero limit uses the server default.
+func (c *Client) ListDead(ctx context.Context, queue string, limit uint32) ([]*pb.Job, error) {
+	var resp *pb.ListDeadJobsResponse
+	err := c.call(ctx, func(ctx context.Context, api pb.QueueServiceClient) (err error) {
+		resp, err = api.ListDeadJobs(ctx, &pb.ListDeadJobsRequest{Queue: queue, Limit: limit})
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.GetJobs(), nil
+}
+
+// Redrive moves a dead-lettered job back to its queue with a fresh retry
+// budget.
+func (c *Client) Redrive(ctx context.Context, jobID string) error {
+	return c.call(ctx, func(ctx context.Context, api pb.QueueServiceClient) error {
+		_, err := api.RedriveJob(ctx, &pb.RedriveJobRequest{JobId: jobID})
 		return err
 	})
 }
@@ -195,6 +220,7 @@ func (c *Client) Stats(ctx context.Context, queue string) (*pb.QueueStatsRespons
 // "try another node" until ctx is done.
 func (c *Client) call(ctx context.Context, fn func(context.Context, pb.QueueServiceClient) error) error {
 	backoff := c.opts.baseBackoff
+	var lastErr error // the most recent retryable error from the cluster
 	for {
 		addr, api, err := c.current()
 		if err != nil {
@@ -203,12 +229,15 @@ func (c *Client) call(ctx context.Context, fn func(context.Context, pb.QueueServ
 		attemptCtx, cancel := context.WithTimeout(ctx, c.opts.attemptTimeout)
 		err = fn(attemptCtx, api)
 		cancel()
-		if err == nil || !retryable(ctx, err) {
+		switch {
+		case err == nil:
+			return nil
+		case ctx.Err() != nil:
+			return expired(ctx, err, lastErr)
+		case !retryable(err):
 			return err
 		}
-		if ctx.Err() != nil {
-			return err // the caller's deadline, not the attempt's, expired
-		}
+		lastErr = err
 
 		if leader := leaderHint(err); leader != "" && leader != addr {
 			c.redirect(addr, leader) // follow the hint straight away
@@ -217,7 +246,7 @@ func (c *Client) call(ctx context.Context, fn func(context.Context, pb.QueueServ
 		c.rotate(addr)
 		select {
 		case <-ctx.Done():
-			return err
+			return expired(ctx, err, lastErr)
 		case <-time.After(jitter(backoff)):
 		}
 		backoff = min(backoff*2, c.opts.maxBackoff)
@@ -225,16 +254,31 @@ func (c *Client) call(ctx context.Context, fn func(context.Context, pb.QueueServ
 }
 
 // retryable reports whether err means the request may succeed on another
-// node or after a short wait.
-func retryable(ctx context.Context, err error) bool {
+// node or after a short wait. It is only called while the caller's context
+// is still live, so a DeadlineExceeded here came from the per-attempt
+// timeout.
+func retryable(err error) bool {
 	switch status.Code(err) {
-	case codes.Unavailable:
-		return true // node down, shutting down, or not the leader
-	case codes.DeadlineExceeded, codes.Canceled:
-		return ctx.Err() == nil // only the per-attempt timeout fired
+	case codes.Unavailable, codes.DeadlineExceeded, codes.Canceled:
+		return true
 	default:
 		return false
 	}
+}
+
+// expired builds the error returned when the caller's context ends. It
+// keeps the caller-facing code (DeadlineExceeded or Canceled) but includes
+// the last error the cluster returned, which usually explains why the call
+// could not finish (for example, no leader during an election).
+func expired(ctx context.Context, err, lastErr error) error {
+	if lastErr == nil {
+		return err
+	}
+	code := codes.DeadlineExceeded
+	if errors.Is(ctx.Err(), context.Canceled) {
+		code = codes.Canceled
+	}
+	return status.Errorf(code, "%v; last error from the cluster: %s", ctx.Err(), status.Convert(lastErr).Message())
 }
 
 func leaderHint(err error) string {

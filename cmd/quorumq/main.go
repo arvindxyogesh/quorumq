@@ -29,9 +29,11 @@ commands:
   submit  -queue Q -payload P [-max-retries N]   enqueue a job
   claim   -queue Q -worker W [-visibility D]     lease the next visible job
   ack     -job ID -lease L                       acknowledge a leased job
-  nack    -job ID -lease L                       return a leased job to its queue
+  nack    -job ID -lease L [-reason R]           report a failure (retry with backoff, or dead-letter)
   get     -job ID                                show a job
   stats   -queue Q                               show queue counts
+  dead    -queue Q [-limit N]                    list dead-lettered jobs, oldest first
+  redrive -job ID                                move a dead-lettered job back to its queue
 
 -addr defaults to $QUORUMQ_ADDR, or localhost:7070. Give several nodes and
 the CLI finds the leader itself.
@@ -108,17 +110,49 @@ func run(args []string, out io.Writer) error {
 	case "ack", "nack":
 		job := fs.String("job", "", "job ID")
 		lease := fs.String("lease", "", "lease ID from claim")
+		reason := fs.String("reason", "", "failure reason (nack only)")
 		if err := fs.Parse(cmdArgs); err != nil {
 			return err
 		}
-		do := c.Ack
-		if cmd == "nack" {
-			do = c.Nack
+		if cmd == "ack" {
+			err = c.Ack(ctx, *job, *lease)
+		} else {
+			err = c.Nack(ctx, *job, *lease, *reason)
 		}
-		if err := do(ctx, *job, *lease); err != nil {
+		if err != nil {
 			return err
 		}
 		return printJSON(out, map[string]string{"job_id": *job, "result": cmd + "ed"})
+
+	case "dead":
+		queue := fs.String("queue", "", "queue name")
+		limit := fs.Uint("limit", 20, "maximum jobs to list (1-100)")
+		if err := fs.Parse(cmdArgs); err != nil {
+			return err
+		}
+		jobs, err := c.ListDead(ctx, *queue, uint32(*limit))
+		if err != nil {
+			return err
+		}
+		list := make([]map[string]any, 0, len(jobs))
+		for _, j := range jobs {
+			m, err := protoToMap(j)
+			if err != nil {
+				return err
+			}
+			list = append(list, m)
+		}
+		return printJSON(out, map[string]any{"jobs": list})
+
+	case "redrive":
+		job := fs.String("job", "", "job ID")
+		if err := fs.Parse(cmdArgs); err != nil {
+			return err
+		}
+		if err := c.Redrive(ctx, *job); err != nil {
+			return err
+		}
+		return printJSON(out, map[string]string{"job_id": *job, "result": "redriven"})
 
 	case "get":
 		job := fs.String("job", "", "job ID")
