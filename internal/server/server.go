@@ -6,16 +6,19 @@ import (
 	"errors"
 	"time"
 
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "github.com/arvindxyogesh/quorumq/api/quorumq/v1"
+	"github.com/arvindxyogesh/quorumq/internal/broker"
 	"github.com/arvindxyogesh/quorumq/internal/queue"
 )
 
-// Broker is what the server needs from the layer that applies commands.
-// It is satisfied by broker.Local today and by the Raft broker in M2.
+// Broker is what the server needs from the layer that applies commands. It
+// is satisfied by broker.Local (single process, used in tests) and by
+// cluster.Broker (Raft-replicated).
 type Broker interface {
 	Submit(ctx context.Context, queue string, payload []byte, maxRetries uint32) (uint64, error)
 	Claim(ctx context.Context, queue, workerID string, visibility time.Duration) (*queue.Job, error)
@@ -133,7 +136,13 @@ func toStatus(err error) error {
 	if _, ok := status.FromError(err); ok {
 		return err
 	}
+	var notLeader *broker.NotLeaderError
+	var unavailable *broker.UnavailableError
 	switch {
+	case errors.As(err, &notLeader):
+		return notLeaderStatus(notLeader)
+	case errors.As(err, &unavailable):
+		return status.Error(codes.Unavailable, err.Error())
 	case errors.Is(err, queue.ErrNotFound):
 		return status.Error(codes.NotFound, err.Error())
 	case errors.Is(err, queue.ErrLeaseMismatch):
@@ -145,6 +154,26 @@ func toStatus(err error) error {
 	default:
 		return status.Error(codes.Internal, err.Error())
 	}
+}
+
+// Leader redirects use the standard google.rpc.ErrorInfo error detail, so any
+// gRPC client can read the hint without a custom header convention.
+const (
+	ErrorDomain       = "quorumq.dev"
+	ReasonNotLeader   = "NOT_LEADER"
+	MetadataLeaderKey = "leader"
+)
+
+func notLeaderStatus(e *broker.NotLeaderError) error {
+	st := status.New(codes.Unavailable, e.Error())
+	info := &errdetails.ErrorInfo{Reason: ReasonNotLeader, Domain: ErrorDomain}
+	if e.Leader != "" {
+		info.Metadata = map[string]string{MetadataLeaderKey: e.Leader}
+	}
+	if withInfo, err := st.WithDetails(info); err == nil {
+		st = withInfo
+	}
+	return st.Err()
 }
 
 func toProto(j *queue.Job) *pb.Job {
