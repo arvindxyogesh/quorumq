@@ -17,12 +17,19 @@ import (
 // writes.
 var aggressiveSnapshots = SnapshotPolicy{Threshold: 32, Interval: 50 * time.Millisecond, TrailingLogs: 8}
 
-func waitForSnapshot(t *testing.T, n *Node, minIndex uint64) {
+// waitForSnapshot waits until n has taken a snapshot covering minIndex. If
+// b is not nil it keeps writing while it waits: a snapshot is only taken
+// once Threshold new entries have accumulated, so a fixed number of writes
+// can stop just short of the next one.
+func waitForSnapshot(t *testing.T, n *Node, b *Broker, minIndex uint64) {
 	t.Helper()
-	deadline := time.Now().Add(15 * time.Second)
+	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
 		if n.Status().LastSnapshotIndex >= minIndex {
 			return
+		}
+		if b != nil {
+			submitN(t, b, 5)
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
@@ -54,7 +61,7 @@ func TestLaggingFollowerCatchesUpViaSnapshot(t *testing.T) {
 
 	submitN(t, b, 200)
 	ln := c.nodes[leader]
-	waitForSnapshot(t, ln, behind+100)
+	waitForSnapshot(t, ln, b, behind+100)
 	first, err := ln.logStore.FirstIndex()
 	if err != nil {
 		t.Fatal(err)
@@ -66,8 +73,8 @@ func TestLaggingFollowerCatchesUpViaSnapshot(t *testing.T) {
 	c.start(follower)
 	c.waitForConvergence()
 	fn := c.nodes[follower]
-	if got := visibleJobs(t, fn); got != 210 {
-		t.Fatalf("follower has %d jobs after catching up, want 210", got)
+	if got, want := visibleJobs(t, fn), visibleJobs(t, c.nodes[leader]); got != want || got < 210 {
+		t.Fatalf("follower has %d jobs after catching up; leader has %d", got, want)
 	}
 	snaps, err := fn.snaps.List()
 	if err != nil || len(snaps) == 0 {
@@ -86,7 +93,7 @@ func TestNodeRebuildsStateFromSnapshotAndLog(t *testing.T) {
 	c.waitForConvergence()
 
 	victim := (leader + 1) % 3
-	waitForSnapshot(t, c.nodes[victim], 64)
+	waitForSnapshot(t, c.nodes[victim], b, 64)
 	submitN(t, b, 7) // some entries newer than the snapshot
 	c.waitForConvergence()
 	c.stop(victim)
@@ -96,8 +103,8 @@ func TestNodeRebuildsStateFromSnapshotAndLog(t *testing.T) {
 	}
 	c.start(victim)
 	c.waitForConvergence()
-	if got := visibleJobs(t, c.nodes[victim]); got != 157 {
-		t.Fatalf("rebuilt node has %d jobs, want 157", got)
+	if got, want := visibleJobs(t, c.nodes[victim]), visibleJobs(t, c.nodes[leader]); got != want || got < 157 {
+		t.Fatalf("rebuilt node has %d jobs; leader has %d", got, want)
 	}
 }
 
@@ -124,7 +131,7 @@ func TestSnapshotPreservesLeasesAndDeadLetters(t *testing.T) {
 	c.waitForConvergence()
 	c.stop(follower)
 	submitN(t, b, 120) // force snapshots and compaction while it is down
-	waitForSnapshot(t, c.nodes[leader], 100)
+	waitForSnapshot(t, c.nodes[leader], b, 100)
 	c.start(follower)
 	c.waitForConvergence()
 
