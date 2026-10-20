@@ -6,9 +6,11 @@ package cluster
 import (
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/hashicorp/raft"
 
+	"github.com/arvindxyogesh/quorumq/internal/metrics"
 	"github.com/arvindxyogesh/quorumq/internal/queue"
 )
 
@@ -16,13 +18,14 @@ import (
 // to MaxAppendEntries committed entries at a time; the store applies each
 // batch in one BoltDB transaction, which amortises the fsync.
 type FSM struct {
-	store *queue.Store
+	store   *queue.Store
+	metrics *metrics.Metrics
 }
 
 var _ raft.BatchingFSM = (*FSM)(nil)
 
-// NewFSM returns an FSM backed by store.
-func NewFSM(store *queue.Store) *FSM { return &FSM{store: store} }
+// NewFSM returns an FSM backed by store. m may be nil.
+func NewFSM(store *queue.Store, m *metrics.Metrics) *FSM { return &FSM{store: store, metrics: m} }
 
 // Apply applies a single committed entry.
 func (f *FSM) Apply(l *raft.Log) any {
@@ -39,7 +42,9 @@ func (f *FSM) ApplyBatch(logs []*raft.Log) []any {
 			entries[i].Data = l.Data
 		}
 	}
+	start := time.Now()
 	results, err := f.store.ApplyBatch(entries)
+	f.metrics.ObserveFSMBatch(len(entries), time.Since(start))
 	if err != nil {
 		// A storage failure means this replica can no longer apply the log
 		// faithfully. Continuing would let it diverge from the others, so

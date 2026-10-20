@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb/v2"
 
+	"github.com/arvindxyogesh/quorumq/internal/metrics"
 	"github.com/arvindxyogesh/quorumq/internal/queue"
 )
 
@@ -29,6 +30,11 @@ type Node struct {
 	transport *raft.NetworkTransport
 	peers     map[raft.ServerID]Peer
 	logger    *slog.Logger
+
+	observer     *raft.Observer
+	observations chan raft.Observation
+	stopObserver chan struct{}
+	observerDone chan struct{}
 }
 
 // On-disk layout of a node's data directory.
@@ -104,7 +110,7 @@ func (n *Node) start() error {
 		return err
 	}
 
-	advertise, err := net.ResolveTCPAddr("tcp", cfg.RaftAdvertise)
+	advertise, err := resolveWithRetry(cfg.RaftAdvertise, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("resolve raft advertise address %q: %w", cfg.RaftAdvertise, err)
 	}
@@ -126,9 +132,10 @@ func (n *Node) start() error {
 	// the latest snapshot first would throw away newer on-disk state.
 	rc.NoSnapshotRestoreOnStart = true
 
-	if n.raft, err = raft.NewRaft(rc, NewFSM(n.store), logs, n.logStore, snaps, n.transport); err != nil {
+	if n.raft, err = raft.NewRaft(rc, NewFSM(n.store, cfg.Metrics), logs, n.logStore, snaps, n.transport); err != nil {
 		return fmt.Errorf("start raft: %w", err)
 	}
+	n.watchLeader()
 
 	if cfg.Bootstrap {
 		if err := n.bootstrap(logs, snaps); err != nil {
@@ -136,6 +143,19 @@ func (n *Node) start() error {
 		}
 	}
 	return nil
+}
+
+// resolveWithRetry resolves addr, retrying for up to timeout. In Kubernetes
+// a pod's own DNS record can appear a few seconds after the pod starts.
+func resolveWithRetry(addr string, timeout time.Duration) (*net.TCPAddr, error) {
+	deadline := time.Now().Add(timeout)
+	for {
+		a, err := net.ResolveTCPAddr("tcp", addr)
+		if err == nil || time.Now().After(deadline) {
+			return a, err
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
 }
 
 // restoreIfBehind restores the newest snapshot if the FSM's own state is
@@ -188,9 +208,42 @@ func (n *Node) bootstrap(logs raft.LogStore, snaps raft.SnapshotStore) error {
 	return nil
 }
 
+// watchLeader counts leader changes. Raft delivers a LeaderObservation each
+// time this node's view of the leader changes, including to "no leader"
+// when an election starts.
+func (n *Node) watchLeader() {
+	n.observations = make(chan raft.Observation, 16)
+	n.stopObserver = make(chan struct{})
+	n.observerDone = make(chan struct{})
+	n.observer = raft.NewObserver(n.observations, false, func(o *raft.Observation) bool {
+		_, ok := o.Data.(raft.LeaderObservation)
+		return ok
+	})
+	n.raft.RegisterObserver(n.observer)
+	go func() {
+		defer close(n.observerDone)
+		for {
+			select {
+			case o := <-n.observations:
+				lo := o.Data.(raft.LeaderObservation)
+				n.cfg.Metrics.LeaderChanged()
+				n.logger.Info("leader changed", "leader_id", string(lo.LeaderID))
+			case <-n.stopObserver:
+				return
+			}
+		}
+	}()
+}
+
 // Shutdown stops Raft and closes storage.
 func (n *Node) Shutdown() error {
 	var errs []error
+	if n.observer != nil {
+		n.raft.DeregisterObserver(n.observer)
+		close(n.stopObserver)
+		<-n.observerDone
+		n.observer = nil
+	}
 	if n.raft != nil {
 		errs = append(errs, n.raft.Shutdown().Error())
 	}
@@ -223,6 +276,24 @@ func (n *Node) LeaderClientAddr() string {
 		return ""
 	}
 	return n.peers[id].ClientAddr
+}
+
+// Store returns the node's state machine store (for the metrics collector).
+func (n *Node) Store() *queue.Store { return n.store }
+
+// RaftStatus returns the Raft state exported as metrics.
+func (n *Node) RaftStatus() metrics.RaftStatus {
+	st := n.Status()
+	return metrics.RaftStatus{
+		IsLeader:          st.State == raft.Leader.String(),
+		HasLeader:         st.LeaderID != "",
+		Term:              st.Term,
+		LastLogIndex:      st.LastLogIndex,
+		CommitIndex:       st.CommitIndex,
+		AppliedIndex:      st.AppliedIndex,
+		FSMAppliedIndex:   st.FSMAppliedIndex,
+		LastSnapshotIndex: st.LastSnapshotIndex,
+	}
 }
 
 // Status is a snapshot of a node's Raft state, for the admin endpoint.

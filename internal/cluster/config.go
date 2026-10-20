@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/arvindxyogesh/quorumq/internal/metrics"
 )
 
 // Peer is one member of the cluster.
@@ -99,6 +101,8 @@ type Config struct {
 	ApplyTimeout time.Duration
 	// RaftLogLevel is the hashicorp/raft log level ("info" by default).
 	RaftLogLevel string
+	// Metrics receives replication metrics; nil disables them.
+	Metrics *metrics.Metrics
 }
 
 func (c *Config) self() (Peer, error) {

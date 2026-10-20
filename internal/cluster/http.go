@@ -3,6 +3,10 @@ package cluster
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/arvindxyogesh/quorumq/internal/metrics"
 )
 
 // AdminHandler serves the node's operational HTTP endpoints:
@@ -10,8 +14,13 @@ import (
 //	GET /healthz  200 while the process is running (liveness)
 //	GET /readyz   200 once the node knows a leader, 503 otherwise (readiness)
 //	GET /status   JSON Raft state: role, term, leader, log indexes
-func AdminHandler(n *Node) http.Handler {
+//	GET /metrics  Prometheus metrics (when m is not nil)
+func AdminHandler(n *Node, m *metrics.Metrics) http.Handler {
 	mux := http.NewServeMux()
+	if m != nil {
+		m.Registry.MustRegister(metrics.NewCollector(n))
+		mux.Handle("GET /metrics", promhttp.HandlerFor(m.Registry, promhttp.HandlerOpts{Registry: m.Registry}))
+	}
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok\n"))
 	})

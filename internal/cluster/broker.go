@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/raft"
 
 	"github.com/arvindxyogesh/quorumq/internal/broker"
+	"github.com/arvindxyogesh/quorumq/internal/metrics"
 	"github.com/arvindxyogesh/quorumq/internal/queue"
 )
 
@@ -26,61 +27,80 @@ import (
 // On a follower every call fails with *broker.NotLeaderError naming the
 // leader, and the client retries there.
 type Broker struct {
-	node  *Node
-	now   func() time.Time
-	retry broker.RetryPolicy
+	node    *Node
+	now     func() time.Time
+	retry   broker.RetryPolicy
+	metrics *metrics.Metrics
 }
 
 // NewBroker returns a Broker for node that retries nacked jobs under retry.
+// Job-flow metrics go to the node's configured Metrics.
 func NewBroker(node *Node, retry broker.RetryPolicy) *Broker {
-	return &Broker{node: node, now: time.Now, retry: retry}
+	return &Broker{node: node, now: time.Now, retry: retry, metrics: node.cfg.Metrics}
 }
 
 func (b *Broker) Submit(ctx context.Context, queueName string, payload []byte, maxRetries uint32) (uint64, error) {
-	r, err := b.propose(ctx, queue.Command{Op: queue.OpSubmit, Submit: &queue.SubmitCmd{
+	r, err := b.propose(ctx, "submit", queue.Command{Op: queue.OpSubmit, Submit: &queue.SubmitCmd{
 		Queue: queueName, Payload: payload, MaxRetries: maxRetries, Now: b.now().UnixNano(),
 	}})
 	if err != nil {
 		return 0, err
 	}
+	if r.Err == nil {
+		b.metrics.JobSubmitted(queueName)
+	}
 	return r.JobID, r.Err
 }
 
 func (b *Broker) Claim(ctx context.Context, queueName, workerID string, visibility time.Duration) (*queue.Job, error) {
-	r, err := b.propose(ctx, queue.Command{Op: queue.OpClaim, Claim: &queue.ClaimCmd{
+	r, err := b.propose(ctx, "claim", queue.Command{Op: queue.OpClaim, Claim: &queue.ClaimCmd{
 		Queue: queueName, WorkerID: workerID, LeaseID: broker.NewLeaseID(),
 		VisibilityTimeout: visibility, Now: b.now().UnixNano(),
 	}})
 	if err != nil {
 		return nil, err
 	}
+	if r.Err == nil {
+		b.metrics.JobClaimed(queueName, r.Job == nil)
+	}
 	return r.Job, r.Err
 }
 
 func (b *Broker) Ack(ctx context.Context, jobID uint64, leaseID string) error {
-	r, err := b.propose(ctx, queue.Command{Op: queue.OpAck, Ack: &queue.AckCmd{
+	r, err := b.propose(ctx, "ack", queue.Command{Op: queue.OpAck, Ack: &queue.AckCmd{
 		JobID: jobID, LeaseID: leaseID, Now: b.now().UnixNano(),
 	}})
 	if err != nil {
 		return err
 	}
+	if r.Err == nil && r.Job != nil {
+		b.metrics.JobAcked(r.Job.Queue)
+	}
 	return r.Err
 }
 
 func (b *Broker) Nack(ctx context.Context, jobID uint64, leaseID, reason string) error {
-	r, err := b.propose(ctx, queue.Command{Op: queue.OpNack, Nack: b.retry.NackCmd(jobID, leaseID, reason, b.now())})
+	r, err := b.propose(ctx, "nack", queue.Command{Op: queue.OpNack, Nack: b.retry.NackCmd(jobID, leaseID, reason, b.now())})
 	if err != nil {
 		return err
+	}
+	if r.Err == nil && r.Job != nil {
+		b.metrics.JobNacked(r.Job.Queue, r.Job.State == queue.StateDead)
 	}
 	return r.Err
 }
 
 func (b *Broker) Redrive(ctx context.Context, jobID uint64) error {
-	r, err := b.propose(ctx, queue.Command{Op: queue.OpRedrive, Redrive: &queue.RedriveCmd{
+	r, err := b.propose(ctx, "redrive", queue.Command{Op: queue.OpRedrive, Redrive: &queue.RedriveCmd{
 		JobID: jobID, Now: b.now().UnixNano(),
 	}})
 	if err != nil {
 		return err
+	}
+	if r.Err == nil {
+		if j, err := b.node.store.Get(jobID); err == nil {
+			b.metrics.JobRedriven(j.Queue)
+		}
 	}
 	return r.Err
 }
@@ -107,7 +127,7 @@ func (b *Broker) Stats(ctx context.Context, queueName string) (queue.Stats, erro
 }
 
 // propose commits cmd to the Raft log and returns the state machine's result.
-func (b *Broker) propose(ctx context.Context, cmd queue.Command) (queue.Result, error) {
+func (b *Broker) propose(ctx context.Context, op string, cmd queue.Command) (queue.Result, error) {
 	if !b.node.IsLeader() {
 		return queue.Result{}, b.notLeader()
 	}
@@ -115,10 +135,12 @@ func (b *Broker) propose(ctx context.Context, cmd queue.Command) (queue.Result, 
 	if err != nil {
 		return queue.Result{}, err
 	}
+	start := time.Now()
 	f := b.node.raft.Apply(data, b.timeout(ctx))
 	if err := wait(ctx, f); err != nil {
 		return queue.Result{}, b.mapRaftError(err)
 	}
+	b.metrics.ObserveApply(op, time.Since(start))
 	r, ok := f.Response().(queue.Result)
 	if !ok {
 		return queue.Result{}, fmt.Errorf("unexpected FSM response %T", f.Response())

@@ -32,6 +32,7 @@ import (
 	pb "github.com/arvindxyogesh/quorumq/api/quorumq/v1"
 	"github.com/arvindxyogesh/quorumq/internal/broker"
 	"github.com/arvindxyogesh/quorumq/internal/cluster"
+	"github.com/arvindxyogesh/quorumq/internal/metrics"
 	"github.com/arvindxyogesh/quorumq/internal/server"
 )
 
@@ -64,7 +65,7 @@ func parseFlags() flags {
 	flag.StringVar(&f.advertiseAddr, "advertise-addr", "", "gRPC address clients use to reach this node (single-node mode only; defaults to -addr)")
 	flag.StringVar(&f.raftAddr, "raft-addr", "127.0.0.1:7000", "Raft transport listen address")
 	flag.StringVar(&f.raftAdvertise, "raft-advertise", "", "Raft address other nodes use to reach this node (defaults to this node's entry in -peers)")
-	flag.StringVar(&f.httpAddr, "http-addr", "127.0.0.1:8080", "admin HTTP address (/healthz, /readyz, /status); empty disables it")
+	flag.StringVar(&f.httpAddr, "http-addr", "127.0.0.1:8080", "admin HTTP address (/healthz, /readyz, /status, /metrics); empty disables it")
 	flag.StringVar(&f.peers, "peers", "", "cluster members as id=raftAddr/clientAddr,...; empty runs a single-node cluster")
 	flag.StringVar(&f.dataDir, "data-dir", "./data", "directory for the Raft log, snapshots and queue state")
 	flag.BoolVar(&f.bootstrap, "bootstrap", true, "bootstrap the cluster from -peers if this node has no Raft state")
@@ -92,6 +93,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	m := metrics.New()
 	node, err := cluster.NewNode(cluster.Config{
 		NodeID:        f.nodeID,
 		RaftBind:      f.raftAddr,
@@ -100,6 +102,7 @@ func run() error {
 		Peers:         peers,
 		Bootstrap:     f.bootstrap,
 		Snapshot:      f.snapshot,
+		Metrics:       m,
 	}, logger)
 	if err != nil {
 		return err
@@ -114,7 +117,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", f.addr, err)
 	}
-	gs := grpc.NewServer(grpc.ChainUnaryInterceptor(logRequests(logger)))
+	gs := grpc.NewServer(grpc.ChainUnaryInterceptor(m.UnaryServerInterceptor(), logRequests(logger)))
 	pb.RegisterQueueServiceServer(gs, server.New(cluster.NewBroker(node, f.retry)))
 	healthSrv := health.NewServer()
 	healthpb.RegisterHealthServer(gs, healthSrv)
@@ -122,13 +125,14 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	go reportReadiness(ctx, node, healthSrv)
 
 	errCh := make(chan error, 2)
 	go func() { errCh <- gs.Serve(lis) }()
 
 	var admin *http.Server
 	if f.httpAddr != "" {
-		admin = &http.Server{Addr: f.httpAddr, Handler: cluster.AdminHandler(node), ReadHeaderTimeout: 5 * time.Second}
+		admin = &http.Server{Addr: f.httpAddr, Handler: cluster.AdminHandler(node, m), ReadHeaderTimeout: 5 * time.Second}
 		go func() {
 			if err := admin.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				errCh <- fmt.Errorf("admin http: %w", err)
@@ -157,6 +161,27 @@ func run() error {
 		gs.Stop()
 	}
 	return nil
+}
+
+// reportReadiness mirrors /readyz on the gRPC health service: the
+// QueueService is SERVING while the node knows a leader to send writes to.
+// The overall ("") status stays SERVING while the process is up.
+func reportReadiness(ctx context.Context, node *cluster.Node, hs *health.Server) {
+	const service = "quorumq.v1.QueueService"
+	t := time.NewTicker(250 * time.Millisecond)
+	defer t.Stop()
+	for {
+		st := healthpb.HealthCheckResponse_NOT_SERVING
+		if node.LeaderClientAddr() != "" {
+			st = healthpb.HealthCheckResponse_SERVING
+		}
+		hs.SetServingStatus(service, st)
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
 }
 
 func peersFromFlags(f flags) ([]cluster.Peer, error) {
