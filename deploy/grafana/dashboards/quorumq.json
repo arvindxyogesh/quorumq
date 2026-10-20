@@ -794,7 +794,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "quorumq_raft_index{kind=\"commit\"} - quorumq_raft_index{kind=\"applied\"}",
+          "expr": "quorumq_raft_index{kind=\"commit\"} - ignoring(kind) quorumq_raft_index{kind=\"applied\"}",
           "legendFormat": "{{instance}}",
           "range": true
         }

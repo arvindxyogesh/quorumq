@@ -1,5 +1,5 @@
 # Temporary: takes a real screenshot of the Grafana dashboard for the README
-# and commits it to this branch. Removed again before merging. (rev 4)
+# and commits it to this branch. Removed again before merging. (rev 5)
 name: dashboard-screenshot
 on:
   push:
