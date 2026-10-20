@@ -50,24 +50,36 @@ type cluster struct {
 	peers string
 }
 
-func freeAddr(t *testing.T) string {
+// freeAddrs returns n distinct free localhost addresses. All n listeners
+// are held open until every port is chosen, so the OS cannot hand out the
+// same port twice (picking ports one at a time can repeat one).
+func freeAddrs(t *testing.T, n int) []string {
 	t.Helper()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
+	addrs := make([]string, n)
+	listeners := make([]net.Listener, n)
+	for i := range listeners {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		listeners[i] = l
+		addrs[i] = l.Addr().String()
 	}
-	defer func() { _ = l.Close() }()
-	return l.Addr().String()
+	for _, l := range listeners {
+		_ = l.Close()
+	}
+	return addrs
 }
 
 func startCluster(t *testing.T, size int) *cluster {
 	t.Helper()
 	c := &cluster{t: t}
 	var peers []string
+	addrs := freeAddrs(t, 3*size)
 	for i := 1; i <= size; i++ {
 		dir := t.TempDir()
 		n := &node{
-			id: fmt.Sprintf("n%d", i), raftAddr: freeAddr(t), grpcAddr: freeAddr(t), httpAddr: freeAddr(t),
+			id: fmt.Sprintf("n%d", i), raftAddr: addrs[3*(i-1)], grpcAddr: addrs[3*(i-1)+1], httpAddr: addrs[3*(i-1)+2],
 			dataDir: filepath.Join(dir, "data"), logPath: filepath.Join(dir, "server.log"),
 		}
 		c.nodes = append(c.nodes, n)

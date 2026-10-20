@@ -22,14 +22,25 @@ type testCluster struct {
 	fnet  *faultNet // if set, nodes talk through it so tests can partition them
 }
 
-func freeAddr(t *testing.T) string {
+// freeAddrs returns n distinct free localhost addresses. All n listeners
+// are held open until every port is chosen, so the OS cannot hand out the
+// same port twice (picking ports one at a time can repeat one).
+func freeAddrs(t *testing.T, n int) []string {
 	t.Helper()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
+	addrs := make([]string, n)
+	listeners := make([]net.Listener, n)
+	for i := range listeners {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		listeners[i] = l
+		addrs[i] = l.Addr().String()
 	}
-	defer func() { _ = l.Close() }()
-	return l.Addr().String()
+	for _, l := range listeners {
+		_ = l.Close()
+	}
+	return addrs
 }
 
 func newTestCluster(t *testing.T, size int) *testCluster {
@@ -45,8 +56,9 @@ func newTestClusterWith(t *testing.T, size int, snap SnapshotPolicy) *testCluste
 func newTestClusterOn(t *testing.T, size int, snap SnapshotPolicy, fnet *faultNet) *testCluster {
 	t.Helper()
 	peers := make([]Peer, size)
+	addrs := freeAddrs(t, size)
 	for i := range peers {
-		peers[i] = Peer{ID: fmt.Sprintf("n%d", i+1), RaftAddr: freeAddr(t), ClientAddr: fmt.Sprintf("client-n%d:7070", i+1)}
+		peers[i] = Peer{ID: fmt.Sprintf("n%d", i+1), RaftAddr: addrs[i], ClientAddr: fmt.Sprintf("client-n%d:7070", i+1)}
 	}
 	c := &testCluster{t: t, nodes: make([]*Node, size), fnet: fnet}
 	for i, p := range peers {
