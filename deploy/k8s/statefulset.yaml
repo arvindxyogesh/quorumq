@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: quorumq
+spec:
+  serviceName: quorumq-peers
+  replicas: 3
+  # Start all pods at once. With the default OrderedReady policy, pod 0 would
+  # wait to become ready, but readiness requires a leader, which requires a
+  # quorum of pods: a deadlock.
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: quorumq
+  template:
+    metadata:
+      labels:
+        app: quorumq
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: /metrics
+    spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: quorumq
+          image: quorumq:dev
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          # Each pod's peer entry is <pod>.quorumq-peers:7000 for Raft and
+          # <pod>.quorumq-peers:7070 for clients; the node finds itself in
+          # the list by its pod name.
+          args:
+            - -node-id=$(POD_NAME)
+            - -addr=0.0.0.0:7070
+            - -raft-addr=0.0.0.0:7000
+            - -http-addr=0.0.0.0:8080
+            - -data-dir=/data
+            - -peers=quorumq-0=quorumq-0.quorumq-peers:7000/quorumq-0.quorumq-peers:7070,quorumq-1=quorumq-1.quorumq-peers:7000/quorumq-1.quorumq-peers:7070,quorumq-2=quorumq-2.quorumq-peers:7000/quorumq-2.quorumq-peers:7070
+          ports:
+            - name: raft
+              containerPort: 7000
+            - name: grpc
+              containerPort: 7070
+            - name: http
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          # Ready once the node knows a leader to route writes to; a node cut
+          # off from the quorum drops out of the client Service.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 2
+            failureThreshold: 2
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

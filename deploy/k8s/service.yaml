@@ -1,0 +1,13 @@
+# Client entry point. Any ready pod accepts the connection; followers
+# redirect clients to the leader's pod address (quorumq-N.quorumq-peers:7070).
+apiVersion: v1
+kind: Service
+metadata:
+  name: quorumq
+spec:
+  selector:
+    app: quorumq
+  ports:
+    - name: grpc
+      port: 7070
+      targetPort: grpc

@@ -1,0 +1,11 @@
+# Voluntary disruptions (node drains, upgrades) take down at most one pod at
+# a time, so a 3-node cluster keeps its quorum of 2.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: quorumq
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: quorumq

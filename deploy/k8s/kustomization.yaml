@@ -1,0 +1,16 @@
+# kubectl apply -k deploy/k8s
+#
+# Expects an image named quorumq:dev that the cluster can pull or already
+# has (for kind: `docker build -t quorumq:dev . && kind load docker-image quorumq:dev`).
+# Override it with `kustomize edit set image quorumq=<registry>/quorumq:<tag>`.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+labels:
+  - pairs:
+      app.kubernetes.io/name: quorumq
+    includeSelectors: false
+resources:
+  - service-peers.yaml
+  - service.yaml
+  - statefulset.yaml
+  - pdb.yaml
