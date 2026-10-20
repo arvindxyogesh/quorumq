@@ -25,7 +25,7 @@ jq -r '"- Commit: `\(.commit)`",
        "- CPU: \(.cpu), \(.cpus) vCPUs; memory \(.memory); kernel \(.kernel)",
        "- Docker \(.docker), \(.go); image \(.image)",
        "- Setup: \(.setup)",
-       "- Payload \(.params.payload_bytes) bytes; closed-loop runs use \(.params.producers) producers and \(.params.workers) workers"' "$ENV"
+       (if .params.payload_bytes then "- Payload \(.params.payload_bytes) bytes; closed-loop runs use \(.params.producers) producers and \(.params.workers) workers" else empty end)' "$ENV"
 echo
 echo "Submit-to-ack latency runs from the start of a Submit call to the end of the"
 echo "worker's successful Ack for that job: submit commit, time queued, claim commit,"
@@ -33,6 +33,7 @@ echo "worker poll delay and ack commit. Every write is committed by a Raft quoru
 echo "fsynced before it is acknowledged."
 echo
 
+if compgen -G "$DIR/throughput/*/result.json" >/dev/null; then
 echo "## Throughput by cluster size"
 echo
 echo "Closed loop for $(jq -r .params.duration "$ENV") per run, $(jq -r .params.reps "$ENV") runs per size; median with [min-max] across runs."
@@ -41,7 +42,7 @@ echo "| Nodes | Completed jobs/s | Submit-to-ack p50 (ms) | p95 (ms) | p99 (ms) 
 echo "| --- | --- | --- | --- | --- | --- |"
 for n in 1 3 5; do
   files=("$DIR"/throughput/n$n-r*/result.json)
-  [[ -e "${files[0]}" ]] || continue
+  [[ -e "${files[0]:-}" ]] || continue
   rates=$(jq -s "$med [.[].ack_rate_per_sec] | {m: median, lo: min, hi: max}" "${files[@]}")
   p50=$(jq -s "$med [.[].submit_to_ack_latency_ms.p50] | median" "${files[@]}" | r1)
   p95=$(jq -s "$med [.[].submit_to_ack_latency_ms.p95] | median" "${files[@]}" | r1)
@@ -51,6 +52,7 @@ for n in 1 3 5; do
   echo "| $n | $(jq .m <<<"$rates" | r0) [$(jq .lo <<<"$rates" | r0)-$(jq .hi <<<"$rates" | r0)] | $p50 | $p95 | $p99 | $lost of $submitted |"
 done
 echo
+fi
 
 if [[ -f "$DIR/latency/result.json" ]]; then
   echo "## Latency at a fixed rate (3 nodes)"
@@ -85,4 +87,25 @@ if [[ -f "$DIR/chaos/result.json" ]]; then
   echo "(\`chaos/completed.csv.gz\`). Duplicates are expected under at-least-once delivery: a job"
   echo "whose claim or ack response was lost in a failover is redelivered after its 5 s lease,"
   echo "and a submit retried after a leader crash may enqueue a second copy."
+fi
+
+shopt -s nullglob
+PARTS=("$DIR"/partition-r*/partition.json)
+if (( ${#PARTS[@]} > 0 )); then
+  echo
+  echo "## Network partition: 5 nodes split 2|3, old leader on the minority side"
+  echo
+  echo "Packets between the two sides are dropped with iptables in each container's network"
+  echo "namespace for $(jq -r .partition_seconds "${PARTS[0]}") s while load runs against all five addresses. During the"
+  echo "partition the script sends writes and reads straight to each minority node with"
+  echo "\`quorumq -no-retry\` (no redirects). After healing it checks that no write sent to the"
+  echo "minority survived, times how long the minority takes to apply everything the majority"
+  echo "had committed, and reconciles every acknowledged submit."
+  echo
+  echo "| Run | Minority writes acked | Minority reads served | Old leader during partition | Majority first ack (ms) | Minority writes surviving heal | Minority catch-up (ms) | Load: acked / lost / dup |"
+  echo "| --- | --- | --- | --- | --- | --- | --- | --- |"
+  for f in "${PARTS[@]}"; do
+    run=$(basename "$(dirname "$f")")
+    jq -r --arg run "$run" '"| \($run) | \(.minority_writes_acknowledged) of \(.minority_write_attempts) | \(.minority_reads_served) of \(.minority_read_attempts) | \(.old_leader_state_during_partition) | \(.majority_first_ack_ms | round) | \(.minority_writes_surviving_after_heal) | \(.minority_caught_up_ms_after_heal) | \(.load.acknowledged) / \(.load.lost) / \(.load.duplicates) |"' "$f"
+  done
 fi
