@@ -14,8 +14,13 @@ GRAFANA=http://localhost:3000
 PROM=http://localhost:9090
 ADDRS=localhost:7071,localhost:7072,localhost:7073
 
+# In GitHub Actions, surface progress and failures as annotations, since raw
+# job logs are not always reachable.
+note() { echo "$*"; [[ -n "${GITHUB_ACTIONS:-}" ]] && echo "::notice::$*" || true; }
+err() { echo "$*" >&2; [[ -n "${GITHUB_ACTIONS:-}" ]] && echo "::error::$*" || true; }
+
 go build -o bin/ ./cmd/...
-wait_for() { for _ in $(seq 1 120); do curl -sf "$1" >/dev/null && return 0; sleep 1; done; echo "timeout: $1" >&2; return 1; }
+wait_for() { for _ in $(seq 1 120); do curl -sf "$1" >/dev/null && return 0; sleep 1; done; err "timeout waiting for $1"; return 1; }
 wait_for "$GRAFANA/api/health"
 wait_for "$PROM/-/ready"
 for i in 1 2 3; do wait_for "localhost:808$i/readyz"; done
@@ -34,11 +39,12 @@ sleep 15 # at least two scrapes after the load, so rate() has data
 echo "==> Prometheus targets"
 curl -sf "$PROM/api/v1/targets" | jq -r '.data.activeTargets[] | "\(.labels.instance) \(.health)"'
 up=$(curl -sf "$PROM/api/v1/targets" | jq '[.data.activeTargets[] | select(.health == "up")] | length')
-[[ "$up" -eq 3 ]] || { echo "FAIL: $up of 3 targets up" >&2; exit 1; }
+[[ "$up" -eq 3 ]] || { err "FAIL: $up of 3 Prometheus targets up"; exit 1; }
+note "Prometheus: 3 of 3 targets up"
 
 echo "==> dashboard"
-DASH=$(curl -sf "$GRAFANA/api/dashboards/uid/quorumq")
-jq -r '.dashboard.title' <<<"$DASH"
+DASH=$(curl -sf "$GRAFANA/api/dashboards/uid/quorumq") || { err "Grafana did not serve dashboard uid quorumq"; exit 1; }
+note "Grafana loaded dashboard: $(jq -r '.dashboard.title' <<<"$DASH")"
 
 fail=0
 while IFS= read -r line; do
@@ -51,16 +57,17 @@ while IFS= read -r line; do
     printf 'OK    %-38s %2d series  %s\n' "$title" "$n" "$expr"
   else
     printf 'EMPTY %-38s           %s\n' "$title" "$expr"; fail=1
-    jq -c '.results.A.error? // .message? // .' <<<"$resp" | head -c 300; echo
+    err "no data for panel '$title': $expr -> $(jq -c '.results.A.error? // .message? // .' <<<"$resp" | head -c 300)"
   fi
 done < <(jq -c '.dashboard.panels[] | select(.targets) | .title as $t | .targets[] | {title: $t, expr}' <<<"$DASH")
 
 if [[ -n "${1:-}" ]]; then
   echo "==> screenshot"
-  npx -y playwright@1.48.2 install --with-deps chromium >/dev/null
+  npx -y playwright@1.48.2 install --with-deps chromium >/dev/null || err "playwright install failed"
   npx -y playwright@1.48.2 screenshot --viewport-size=1600,1500 --wait-for-timeout=10000 --full-page \
-    "$GRAFANA/d/quorumq/quorumq?orgId=1&from=now-5m&to=now&kiosk&theme=dark" "$1"
+    "$GRAFANA/d/quorumq/quorumq?orgId=1&from=now-5m&to=now&kiosk&theme=dark" "$1" || err "screenshot failed"
+  [[ -s "$1" ]] && note "screenshot saved to $1"
 fi
 
-(( fail == 0 )) || { echo "FAIL: some dashboard queries returned no data" >&2; exit 1; }
-echo "OK: every dashboard query returned data through Grafana"
+(( fail == 0 )) || { err "FAIL: some dashboard queries returned no data"; exit 1; }
+note "OK: all $(jq '[.dashboard.panels[] | select(.targets) | .targets[]] | length' <<<"$DASH") dashboard queries returned data through Grafana"
