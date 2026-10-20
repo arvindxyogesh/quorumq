@@ -1,0 +1,51 @@
+# A 3-node quorumq cluster on one machine.
+#
+#   docker compose -f deploy/docker-compose.yml up -d --build
+#   go run ./cmd/quorumq -addr localhost:7071,localhost:7072,localhost:7073 stats -queue demo
+#   curl -s localhost:8081/status
+#
+# Each node's client address in the peer list is the host-mapped port, so the
+# leader hints that followers return are usable by clients on the host (the
+# CLI, the load generator). Clients inside the Compose network would instead
+# need n1:7070-style addresses.
+name: quorumq
+
+x-peers: &peers "n1=n1:7000/localhost:7071,n2=n2:7000/localhost:7072,n3=n3:7000/localhost:7073"
+
+x-node: &node
+  build:
+    context: ..
+    dockerfile: Dockerfile
+  image: quorumq:dev
+  restart: "no"
+  stop_grace_period: 15s
+
+services:
+  n1:
+    <<: *node
+    hostname: n1
+    command: ["-node-id=n1", "-addr=0.0.0.0:7070", "-raft-addr=0.0.0.0:7000", "-raft-advertise=n1:7000",
+              "-http-addr=0.0.0.0:8080", "-data-dir=/data", "-peers", *peers]
+    ports: ["7071:7070", "8081:8080"]
+    volumes: ["n1-data:/data"]
+
+  n2:
+    <<: *node
+    hostname: n2
+    command: ["-node-id=n2", "-addr=0.0.0.0:7070", "-raft-addr=0.0.0.0:7000", "-raft-advertise=n2:7000",
+              "-http-addr=0.0.0.0:8080", "-data-dir=/data", "-peers", *peers]
+    ports: ["7072:7070", "8082:8080"]
+    volumes: ["n2-data:/data"]
+
+  n3:
+    <<: *node
+    hostname: n3
+    command: ["-node-id=n3", "-addr=0.0.0.0:7070", "-raft-addr=0.0.0.0:7000", "-raft-advertise=n3:7000",
+              "-http-addr=0.0.0.0:8080", "-data-dir=/data", "-peers", *peers]
+    ports: ["7073:7070", "8083:8080"]
+    volumes: ["n3-data:/data"]
+
+volumes:
+  n1-data:
+  n2-data:
+  n3-data:

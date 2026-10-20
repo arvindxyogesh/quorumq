@@ -19,7 +19,7 @@ echo "==> starting server on $ADDR (data in $DATA_DIR)"
 SERVER_PID=$!
 trap 'kill $SERVER_PID 2>/dev/null || true; wait $SERVER_PID 2>/dev/null || true; rm -rf "$DATA_DIR"' EXIT
 
-for _ in $(seq 1 50); do
+for _ in $(seq 1 100); do
   q stats -queue demo >/dev/null 2>&1 && break
   sleep 0.1
 done
