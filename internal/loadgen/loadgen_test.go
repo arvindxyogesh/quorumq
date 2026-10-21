@@ -47,10 +47,11 @@ func TestRunReconcilesEverySubmit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The pacer must never exceed the target; under heavy CI load it may
-	// fall short, so only a loose lower bound is checked.
-	if res.Accepted < 20 || res.Accepted > 220 {
-		t.Fatalf("accepted %d submits at a 200/s target over 1s", res.Accepted)
+	// The pacer must never exceed its target. How far below the target a run
+	// lands depends on how busy the machine is (a loaded CI runner once
+	// managed only 4), so the only lower bound is that some submits happened.
+	if res.Accepted < 1 || res.Accepted > 220 {
+		t.Fatalf("accepted %d submits at a 200/s target over 1s; want 1-220", res.Accepted)
 	}
 	if res.Lost != 0 || res.Completed != res.Accepted {
 		t.Fatalf("lost %d; completed %d of %d", res.Lost, res.Completed, res.Accepted)
