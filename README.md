@@ -427,7 +427,8 @@ measured. The network-partition experiment was not repeated here because it
 needs root for iptables; its results are the sandbox ones above.
 
 Reproduce on a Slurm cluster with
-`CGO_ENABLED=0 go build -o bin/ ./cmd/... && ALLOC=b sbatch -A <account> -t 01:00:00 --cpus-per-task=6 --mem=24G scripts/bench-slurm.sh`.
+`CGO_ENABLED=0 go build -o bin/ ./cmd/... && ALLOC=b sbatch -t 01:00:00 --cpus-per-task=6 --mem=24G scripts/bench-slurm.sh`,
+with your Slurm account in `SBATCH_ACCOUNT`.
 
 ## Running it
 
@@ -496,7 +497,7 @@ scripts/cluster.sh up 3
 bin/quorumq-load run -addr $(scripts/cluster.sh addrs) -producers 32 -workers 64 -duration 30s
 scripts/chaos.sh 5 10 20 kills.jsonl # kill the leader 5 times, 10-20s apart, timing each failover
 sudo scripts/partition.sh out/ 30     # 5 nodes, 2|3 network partition for 30s (needs root for iptables)
-sbatch -A <account> scripts/bench-slurm.sh  # the bench.sh matrix on Slurm, one broker per node, no Docker
+sbatch scripts/bench-slurm.sh        # the bench.sh matrix on Slurm, one broker per node, no Docker (account from SBATCH_ACCOUNT)
 ```
 
 ### Configuration

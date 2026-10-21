@@ -18,12 +18,13 @@
 #
 # The last node of the allocation runs quorumq-load; the others run one broker
 # each. Broker data directories go on node-local disk and are wiped between
-# experiments. Build the binaries first and submit from the repository root,
-# with the Slurm account and time limit on the command line:
+# experiments. Build the binaries first and submit from the repository root.
+# The Slurm account comes from the environment (SBATCH_ACCOUNT), never from
+# this script:
 #
 #   CGO_ENABLED=0 go build -o bin/ ./cmd/...
-#   ALLOC=a sbatch -A ACCOUNT -t 01:00:00 --exclusive --mem=0 scripts/bench-slurm.sh
-#   ALLOC=b sbatch -A ACCOUNT -t 01:00:00 --cpus-per-task=8 --mem=24G scripts/bench-slurm.sh
+#   ALLOC=a sbatch -t 01:00:00 --exclusive --mem=0 scripts/bench-slurm.sh
+#   ALLOC=b sbatch -t 01:00:00 --cpus-per-task=8 --mem=24G scripts/bench-slurm.sh
 #
 # Option a gives each broker a whole node; option b shares nodes with other jobs
 # and gives each step --cpus-per-task CPUs (the committed results used 6).
